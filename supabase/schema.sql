@@ -19,12 +19,17 @@ create table public.profiles (
   name text not null,
   type text not null check (type in ('restaurante', 'comerciante', 'admin')),
   document text not null unique,
+  document_type text not null default 'cnpj' check (document_type in ('cpf', 'cnpj')),
   address text not null,
   whatsapp text not null,
   responsible text not null,
   email text not null,
+  password_hash text,
+  avatar_url text,
   interests text[] not null default '{}',
   opening_hours text not null,
+  opening_time time,
+  closing_time time,
   status text not null default 'pendente' check (status in ('pendente', 'aprovado', 'rejeitado', 'bloqueado')),
   created_at timestamptz not null default now()
 );
@@ -109,6 +114,38 @@ create policy "authenticated users can read active categories" on public.categor
 create policy "authenticated users can read active foods" on public.foods for select to authenticated using (active = true);
 create policy "authenticated users can read approved profiles" on public.profiles for select to authenticated using (status = 'aprovado' or id = auth.uid());
 create policy "users can manage their own profile" on public.profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (
+    id, name, type, document, document_type, address, whatsapp,
+    responsible, email, interests, opening_hours, status
+  ) values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', ''),
+    coalesce(new.raw_user_meta_data->>'type', 'comerciante'),
+    coalesce(new.raw_user_meta_data->>'document', ''),
+    coalesce(new.raw_user_meta_data->>'document_type', 'cnpj'),
+    coalesce(new.raw_user_meta_data->>'address', ''),
+    coalesce(new.raw_user_meta_data->>'whatsapp', ''),
+    coalesce(new.raw_user_meta_data->>'responsible', ''),
+    new.email,
+    coalesce(array(select jsonb_array_elements_text(new.raw_user_meta_data->'interests')), '{}'),
+    coalesce(new.raw_user_meta_data->>'opening_hours', ''),
+    'pendente'
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
 create policy "authenticated users can read listings" on public.listings for select to authenticated using (true);
 create policy "users can create their own listings" on public.listings for insert to authenticated with check (owner_id = auth.uid());
 create policy "owners can update their listings" on public.listings for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());

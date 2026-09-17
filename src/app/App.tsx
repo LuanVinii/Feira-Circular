@@ -3,18 +3,21 @@ import type React from "react";
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
 import {
   Leaf, Package, Bell, Plus, Home, MessageSquare,
-  ChevronRight, ArrowLeft, Check, Clock,
+  ChevronRight, ChevronLeft, ArrowLeft, Check, Clock,
   MapPin, User, Shield, Send,
   CheckCircle2, Timer, Camera, X, Eye,
   Info, RefreshCw, AlertCircle, ClipboardList,
-  Ban, Trash2, Users, Activity,
+  Ban, Trash2, Users, Activity, ShoppingBasket,
   AlertTriangle, ThumbsUp, ThumbsDown,
   Pencil, CalendarCheck, Flag, UtensilsCrossed,
 } from "lucide-react";
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { supabase } from "../lib/supabase";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 type Unidade = "g" | "kg";
+type TipoDocumento = "cpf" | "cnpj";
 type Maturacao = "verde" | "meio-maduro" | "maduro" | "muito-maduro";
 type StatusTroca =
   | "proposto" | "contraproposto" | "aceito"
@@ -48,8 +51,9 @@ interface Encontro {
 
 interface Usuario {
   id: string; nome: string; tipo: "restaurante" | "comerciante" | "admin";
-  cnpjCpf: string; endereco: string; whatsapp: string; responsavel: string;
-  email: string; alimentosInteresse: string[]; horario: string;
+  cnpjCpf: string; documentoTipo?: TipoDocumento; endereco: string; whatsapp: string; responsavel: string;
+  email: string; senha?: string; alimentosInteresse: string[]; horario: string;
+  fotoUrl?: string;
   status: StatusUsuario; criadoEm: string; ultimaAtividade?: string;
   motivoRejeicao?: string; motivoBloqueio?: string;
 }
@@ -169,13 +173,13 @@ const INIT_ALIMENTOS_BD: AlimentoBD[] = [
 ];
 
 const INIT_USUARIOS: Usuario[] = [
-  { id: "u1", nome: "Restaurante Tempero da Roça", tipo: "restaurante", cnpjCpf: "000.000.001-91", email: "tempero@exemplo.com.br", endereco: "Rua Nova, Barraca 23-A, Setor C", whatsapp: "(75) 99100-0001", responsavel: "Maria das Graças", alimentosInteresse: ["tomate","cebola","coentro","pimentao"], horario: "06:00 às 14:00", status: "aprovado", criadoEm: "2026-08-01T08:00:00", ultimaAtividade: "2026-08-15T07:30:00" },
-  { id: "u2", nome: "Distribuidora São Cristóvão", tipo: "comerciante", cnpjCpf: "00.000.002/0001-02", email: "sao.cristovao@exemplo.com.br", endereco: "Baraúnas, Galpão 3, Lote 45", whatsapp: "(75) 99100-0002", responsavel: "João Batista Oliveira", alimentosInteresse: ["mamao","banana","manga","abacaxi"], horario: "05:00 às 13:00", status: "aprovado", criadoEm: "2026-07-28T06:00:00", ultimaAtividade: "2026-08-15T06:45:00" },
-  { id: "u3", nome: "Restaurante Sabor Nordestino", tipo: "restaurante", cnpjCpf: "000.000.003-13", email: "sabornordestino@exemplo.com.br", endereco: "Queimadinha, Loja 7, Setor B", whatsapp: "(75) 99100-0003", responsavel: "Ana Cláudia Costa", alimentosInteresse: ["banana","mamao","cenoura","beterraba"], horario: "06:30 às 15:00", status: "aprovado", criadoEm: "2026-08-05T07:30:00" },
+  { id: "u1", nome: "Restaurante Tempero da Roça", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "12.345.678/0001-91", email: "tempero@exemplo.com.br", senha: "123456", endereco: "Rua Nova, Barraca 23-A, Setor C", whatsapp: "(75) 99100-0001", responsavel: "Maria das Graças", alimentosInteresse: ["tomate","cebola","coentro","pimentao"], horario: "06:00 às 14:00", status: "aprovado", criadoEm: "2026-08-01T08:00:00", ultimaAtividade: "2026-08-15T07:30:00" },
+  { id: "u2", nome: "Distribuidora São Cristóvão", tipo: "comerciante", cnpjCpf: "00.000.002/0001-02", email: "sao.cristovao@exemplo.com.br", senha: "123456", endereco: "Baraúnas, Galpão 3, Lote 45", whatsapp: "(75) 99100-0002", responsavel: "João Batista Oliveira", alimentosInteresse: ["mamao","banana","manga","abacaxi"], horario: "05:00 às 13:00", status: "aprovado", criadoEm: "2026-07-28T06:00:00", ultimaAtividade: "2026-08-15T06:45:00" },
+  { id: "u3", nome: "Restaurante Sabor Nordestino", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "23.456.789/0001-13", email: "sabornordestino@exemplo.com.br", endereco: "Queimadinha, Loja 7, Setor B", whatsapp: "(75) 99100-0003", responsavel: "Ana Cláudia Costa", alimentosInteresse: ["banana","mamao","cenoura","beterraba"], horario: "06:30 às 15:00", status: "aprovado", criadoEm: "2026-08-05T07:30:00" },
   { id: "u4", nome: "Mercado Progresso", tipo: "comerciante", cnpjCpf: "00.000.004/0001-24", email: "mercado.progresso@exemplo.com.br", endereco: "Rua Nova, Barraca 14, Setor A", whatsapp: "(75) 99100-0004", responsavel: "Pedro Alves Lima", alimentosInteresse: ["tomate","quiabo","maxixe","jilo"], horario: "04:00 às 12:00", status: "aprovado", criadoEm: "2026-07-20T05:00:00" },
-  { id: "u5", nome: "Lanchonete Boa Vista", tipo: "restaurante", cnpjCpf: "000.000.005-55", email: "boavista@exemplo.com.br", endereco: "Baraúnas, Loja 2, Corredor Norte", whatsapp: "(75) 99100-0005", responsavel: "Carla Ferreira", alimentosInteresse: ["alface","tomate","cebolinha"], horario: "07:00 às 18:00", status: "pendente", criadoEm: "2026-08-14T09:00:00" },
+  { id: "u5", nome: "Lanchonete Boa Vista", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "34.567.890/0001-55", email: "boavista@exemplo.com.br", endereco: "Baraúnas, Loja 2, Corredor Norte", whatsapp: "(75) 99100-0005", responsavel: "Carla Ferreira", alimentosInteresse: ["alface","tomate","cebolinha"], horario: "07:00 às 18:00", status: "pendente", criadoEm: "2026-08-14T09:00:00" },
   { id: "u6", nome: "Hortifrúti Raízes do Sertão", tipo: "comerciante", cnpjCpf: "00.000.006/0001-46", email: "raizesdosertao@exemplo.com.br", endereco: "Queimadinha, Galpão 1, Dock 8", whatsapp: "(75) 99100-0006", responsavel: "Raimundo Nonato", alimentosInteresse: ["manga","goiaba","caju"], horario: "04:30 às 12:30", status: "pendente", criadoEm: "2026-08-15T07:00:00" },
-  { id: "admin", nome: "Administração Central", tipo: "admin", cnpjCpf: "00.000.000/0001-00", email: "admin@centrotroca.feira.ba", endereco: "Centro de Abastecimento, Administração", whatsapp: "(75) 99100-0000", responsavel: "Gestão do Sistema", alimentosInteresse: [], horario: "24h", status: "aprovado", criadoEm: "2026-01-01T00:00:00" },
+  { id: "admin", nome: "Administração Central", tipo: "admin", cnpjCpf: "00.000.000/0001-00", email: "admin@centrotroca.feira.ba", senha: "admin123", endereco: "Centro de Abastecimento, Administração", whatsapp: "(75) 99100-0000", responsavel: "Gestão do Sistema", alimentosInteresse: [], horario: "24h", status: "aprovado", criadoEm: "2026-01-01T00:00:00" },
 ];
 
 const INIT_LISTAGENS: Listagem[] = [
@@ -274,7 +278,7 @@ function getPendingConfirmation(userId: string, propostas: Proposta[], listagens
 type Errors = Record<string, string>;
 function validateNome(v: string, min=3, max=100): string|null { if(!v.trim())return "Campo obrigatório."; if(v.trim().length<min)return `Mínimo ${min} caracteres.`; if(v.trim().length>max)return `Máximo ${max} caracteres.`; return null; }
 function validateEmail(v: string): string|null { if(!v.trim())return "Campo obrigatório."; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()))return "Informe um e-mail válido."; return null; }
-function validateCNPJCPF(v: string, tipo: "restaurante"|"comerciante"): string|null { const d=v.replace(/\D/g,""); if(tipo==="restaurante"&&d.length!==11)return "Informe um CPF válido (11 dígitos)."; if(tipo==="comerciante"&&d.length!==14)return "Informe um CNPJ válido (14 dígitos)."; return null; }
+function validateCNPJCPF(v: string, documentoTipo: TipoDocumento): string|null { const d=v.replace(/\D/g,""); if(documentoTipo==="cpf"&&d.length!==11)return "Informe um CPF válido (11 dígitos)."; if(documentoTipo==="cnpj"&&d.length!==14)return "Informe um CNPJ válido (14 dígitos)."; return null; }
 function validatePhone(v: string): string|null { const d=v.replace(/\D/g,""); if(d.length<10||d.length>11)return "Informe um telefone com DDD."; return null; }
 function validateQtd(v: string): string|null { const n=parseFloat(v); if(!v||isNaN(n))return "Informe uma quantidade válida."; if(n<=0)return "A quantidade deve ser maior que zero."; return null; }
 
@@ -350,9 +354,9 @@ function ListagemCard({ l, usuarios, alimentosBD, onClick }: { l: Listagem; usua
           <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: l.tipo==="oferta"?"#2F6B5E":"#B87A00" }}>{l.tipo==="oferta"?"Oferta":"Pedido"}</p>
           <p className="font-extrabold text-foreground text-base leading-tight">{nomeAlimento(l.alimento, alimentosBD)}</p>
           <p className="text-sm text-muted-foreground">{fmtQtd(l.quantidadeG)} · {MAT[l.maturacao].label}</p>
-          <div className="flex items-center justify-between mt-auto pt-2">
-            <p className="text-xs text-muted-foreground truncate max-w-[110px]">{u?.responsavel.split(" ")[0]}</p>
-            <p className="text-xs text-muted-foreground">Até {fmtDateShort(l.prazo)}</p>
+          <div className="flex items-center justify-between gap-2 mt-auto pt-2">
+            <p className="text-xs text-muted-foreground truncate min-w-0">{u?.responsavel.split(" ")[0]}</p>
+            <p className="text-xs text-muted-foreground whitespace-nowrap">Até {fmtDateShort(l.prazo)}</p>
           </div>
         </div>
       </div>
@@ -417,7 +421,7 @@ function TopBar({ title, onBack, notifCount, onNotif }: { title: string; onBack?
   return (
     <header className="md:hidden bg-primary text-primary-foreground h-12 flex items-center justify-between px-4 flex-shrink-0">
       <div className="flex items-center gap-3">
-        {onBack ? <button onClick={onBack} className="active:opacity-70"><ArrowLeft className="w-5 h-5"/></button> : <Leaf className="w-4 h-4 text-[#E8A33D]"/>}
+        {onBack ? <button onClick={onBack} className="active:opacity-70"><ArrowLeft className="w-5 h-5"/></button> : <ShoppingBasket className="w-4 h-4 text-[#E8A33D]"/>}
         <span className="font-bold text-sm truncate">{title}</span>
       </div>
       <div className="relative">
@@ -509,7 +513,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
     return (
       <aside className="bg-primary flex flex-col h-full w-full">
         <div className="p-5 pb-4 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-[#E85D4E]"/><div><p className="font-black text-primary-foreground text-xs">Painel Admin</p><p className="font-bold text-primary-foreground/60 text-[10px]">Feira Circular</p></div></div>
+          <div className="flex items-center gap-2 min-w-0"><ShoppingBasket className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/><div className="min-w-0"><p className="font-black text-primary-foreground text-xs truncate">Painel Admin</p><p className="font-bold text-primary-foreground/60 text-[10px] truncate">Feira Circular</p></div></div>
           <button onClick={onNotif} className="relative text-primary-foreground/70 hover:text-primary-foreground"><Bell className="w-4 h-4"/>{notifCount>0&&<span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E85D4E] rounded-full text-[9px] font-bold flex items-center justify-center">{notifCount}</span>}</button>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -540,7 +544,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
   return (
     <aside className="bg-primary flex flex-col h-full w-full">
       <div className="p-5 pb-4 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-2"><Leaf className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/><div><p className="font-black text-primary-foreground text-xs">Feira Circular</p><p className="font-bold text-primary-foreground/60 text-[10px]">Trocas de Hortifrúti</p></div></div>
+        <div className="flex items-center gap-2"><ShoppingBasket className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/><div><p className="font-black text-primary-foreground text-xs">Feira Circular</p><p className="font-bold text-primary-foreground/60 text-[10px]">Trocas de Hortifrúti</p></div></div>
         <button onClick={onNotif} className="relative text-primary-foreground/70 hover:text-primary-foreground"><Bell className="w-4 h-4"/>{notifCount>0&&<span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E85D4E] rounded-full text-[9px] font-bold flex items-center justify-center">{notifCount}</span>}</button>
       </div>
       <nav className="flex-1 p-2 space-y-0.5">
@@ -569,7 +573,7 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
       <div className="bg-primary text-primary-foreground px-5">
         <div className="max-w-md mx-auto pt-12 pb-10">
           <div className="flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Leaf className="w-4 h-4 text-[#E8A33D]"/></div>
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><ShoppingBasket className="w-4 h-4 text-[#E8A33D]"/></div>
             <div>
               <p className="text-xs font-bold text-primary-foreground/80">Feira Circular</p>
               <p className="text-[10px] text-primary-foreground/50 flex items-center gap-1"><MapPin className="w-2.5 h-2.5"/>Centro de Abastecimento, Feira de Santana-BA</p>
@@ -596,7 +600,7 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
           </div>
         </div>
       </div>
-      <div className="flex-1 px-5 py-8 max-w-md mx-auto w-full space-y-6">
+      <div className="flex-1 px-5 py-8 max-w-md md:max-w-4xl mx-auto w-full space-y-6">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">O que você encontra aqui</p>
           <div className="grid grid-cols-2 gap-2">
@@ -665,25 +669,30 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 
 function LoginView({ usuarios, onLogin, onRegistro, onBack }: { usuarios: Usuario[]; onLogin: (u: Usuario)=>void; onRegistro: ()=>void; onBack: ()=>void }) {
-  const aprovados = usuarios.filter(u => u.status === "aprovado");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const usuario = usuarios.find(u => u.status === "aprovado" && u.email.toLowerCase() === email.trim().toLowerCase() && u.senha === senha);
+    if (!usuario) { setErro("E-mail ou senha inválidos."); return; }
+    onLogin(usuario);
+  }
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="bg-primary text-primary-foreground px-5 pt-12 pb-8">
         <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
-        <div className="flex items-center gap-2 mb-1"><Leaf className="w-4 h-4 text-[#E8A33D]"/><p className="text-xs font-semibold text-primary-foreground/60 uppercase tracking-widest">Feira Circular</p></div>
-        <h1 className="text-2xl font-black text-primary-foreground">Selecione seu cadastro</h1>
-        <p className="text-xs text-primary-foreground/40 mt-1">Demonstração de acesso</p>
+        <div className="flex items-center gap-2 mb-1"><ShoppingBasket className="w-4 h-4 text-[#E8A33D]"/><p className="text-xs font-semibold text-primary-foreground/60 uppercase tracking-widest">Feira Circular</p></div>
+        <div className="flex items-center gap-2"><ShoppingBasket className="w-5 h-5 text-[#E8A33D]"/><h1 className="text-2xl font-black text-primary-foreground">Entrar na plataforma</h1></div>
+        <p className="text-xs text-primary-foreground/40 mt-1">Use o e-mail e a senha do estabelecimento.</p>
       </div>
       <div className="flex-1 px-5 py-4 max-w-md mx-auto w-full">
-        <div className="divide-y divide-border">
-          {aprovados.map(u => (
-            <button key={u.id} onClick={() => onLogin(u)} className="w-full flex items-center gap-4 py-4 text-left active:bg-muted/50 transition-colors">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${u.id==="admin"?"bg-[#E85D4E]":u.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>{u.id==="admin"?<Shield className="w-4 h-4"/>:u.nome.charAt(0)}</div>
-              <div className="flex-1 min-w-0"><p className="font-semibold text-foreground text-sm truncate">{u.nome}</p><p className="text-xs text-muted-foreground capitalize">{u.tipo==="admin"?"Administrador":u.tipo} · {u.responsavel}</p></div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0"/>
-            </button>
-          ))}
-        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <Inp label="E-mail" type="email" value={email} autoComplete="email" onChange={e=>{setEmail(e.target.value);setErro("")}} placeholder="contato@estabelecimento.com" />
+          <Inp label="Senha" type="password" value={senha} autoComplete="current-password" onChange={e=>{setSenha(e.target.value);setErro("")}} placeholder="Sua senha" />
+          {erro && <p className="text-sm text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-4 h-4"/>{erro}</p>}
+          <Btn type="submit" className="w-full">Entrar</Btn>
+        </form>
         <div className="pt-6 text-center">
           <p className="text-sm text-muted-foreground">Não tem cadastro? <button onClick={onRegistro} className="text-primary font-semibold hover:underline">Solicitar acesso</button></p>
         </div>
@@ -695,11 +704,11 @@ function LoginView({ usuarios, onLogin, onRegistro, onBack }: { usuarios: Usuari
 // ─── REGISTRO ─────────────────────────────────────────────────────────────────
 
 function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
-  onSubmit: (data: Partial<Usuario>)=>void; onBack: ()=>void;
+  onSubmit: (data: Partial<Usuario>)=>void | Promise<void>; onBack: ()=>void;
   alimentosBD: AlimentoBD[]; categorias: CategoriaAlimento[];
 }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ nome:"", tipo:"restaurante" as "restaurante"|"comerciante", cnpjCpf:"", endereco:"", whatsapp:"", responsavel:"", email:"", horario:"", alimentosInteresse:[] as string[], termos:false });
+  const [form, setForm] = useState({ nome:"", tipo:"restaurante" as "restaurante"|"comerciante", documentoTipo:"cnpj" as TipoDocumento, cnpjCpf:"", endereco:"", whatsapp:"", responsavel:"", email:"", senha:"", confirmaSenha:"", abre:"", fecha:"", horario:"", alimentosInteresse:[] as string[], termos:false });
   const [errors, setErrors] = useState<Errors>({});
 
   function set<K extends keyof typeof form>(k: K, v: typeof form[K]) { setForm(f=>({...f,[k]:v})); setErrors(e=>{ const n={...e}; delete n[k as string]; return n; }); }
@@ -708,8 +717,10 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
     const e: Errors = {};
     const nErr=validateNome(form.nome,3,100); if(nErr)e.nome=nErr;
     const rErr=validateNome(form.responsavel,3,80); if(rErr)e.responsavel=rErr;
-    const dErr=validateCNPJCPF(form.cnpjCpf,form.tipo); if(dErr)e.cnpjCpf=dErr;
+    const dErr=validateCNPJCPF(form.cnpjCpf,form.documentoTipo); if(dErr)e.cnpjCpf=dErr;
     const emErr=validateEmail(form.email); if(emErr)e.email=emErr;
+    if(form.senha.length<6)e.senha="A senha deve ter ao menos 6 caracteres.";
+    if(form.senha!==form.confirmaSenha)e.confirmaSenha="As senhas não conferem.";
     const enErr=validateNome(form.endereco,5,200); if(enErr)e.endereco=enErr;
     const tErr=validatePhone(form.whatsapp); if(tErr)e.whatsapp=tErr;
     if(!form.horario)e.horario="Selecione o horário.";
@@ -718,7 +729,6 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
 
   function goStep3() { if(form.alimentosInteresse.length===0){setErrors({alimentosInteresse:"Selecione ao menos um alimento."});return;} setErrors({}); setStep(3); }
 
-  const horarioOpts = ["04:00 às 10:00","04:00 às 12:00","04:00 às 14:00","05:00 às 11:00","05:00 às 13:00","06:00 às 12:00","06:00 às 14:00","06:00 às 18:00","07:00 às 15:00","07:00 às 18:00"];
   const alimentosAtivos = alimentosBD.filter(a => a.ativo);
   const catsAtivas = categorias.filter(c => c.ativa);
 
@@ -733,14 +743,16 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
         {step===1 && (
           <div className="space-y-4">
             <h2 className="font-bold text-foreground mb-4">Dados do estabelecimento</h2>
-            <div><p className="text-sm font-semibold text-foreground mb-2">Tipo <span className="text-[#E85D4E]">*</span></p><div className="flex gap-3">{(["restaurante","comerciante"] as const).map(t=><button key={t} type="button" onClick={()=>set("tipo",t)} className={`flex-1 py-3 rounded-lg border-2 text-sm font-semibold capitalize transition-colors ${form.tipo===t?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>{t}</button>)}</div></div>
+            <div><p className="text-sm font-semibold text-foreground mb-2">Tipo <span className="text-[#E85D4E]">*</span></p><div className="flex gap-3">{(["restaurante","comerciante"] as const).map(t=><button key={t} type="button" onClick={()=>{set("tipo",t);if(t==="restaurante"){set("documentoTipo","cnpj");set("cnpjCpf","");}}} className={`flex-1 py-3 rounded-lg border-2 text-sm font-semibold capitalize transition-colors ${form.tipo===t?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>{t}</button>)}</div></div>
             <Inp label="Nome do estabelecimento *" placeholder="Ex: Restaurante do João" maxLength={100} value={form.nome} error={errors.nome} onChange={e=>set("nome",e.target.value)}/>
             <Inp label="Nome do responsável *" placeholder="Nome completo" maxLength={80} value={form.responsavel} error={errors.responsavel} onChange={e=>set("responsavel",e.target.value)}/>
-            <Inp label={`${form.tipo==="restaurante"?"CPF":"CNPJ"} *`} placeholder={form.tipo==="restaurante"?"000.000.000-00":"00.000.000/0001-00"} value={form.cnpjCpf} error={errors.cnpjCpf} onChange={e=>set("cnpjCpf",form.tipo==="restaurante"?maskCPF(e.target.value):maskCNPJ(e.target.value))}/>
+            {form.tipo==="comerciante"&&<div><p className="text-sm font-semibold text-foreground mb-2">Tipo de documento *</p><div className="flex gap-2"><button type="button" onClick={()=>{set("documentoTipo","cpf");set("cnpjCpf","")}} className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold ${form.documentoTipo==="cpf"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>CPF</button><button type="button" onClick={()=>{set("documentoTipo","cnpj");set("cnpjCpf","")}} className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold ${form.documentoTipo==="cnpj"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>CNPJ</button></div></div>}
+            <Inp label={`${form.documentoTipo.toUpperCase()} *`} placeholder={form.documentoTipo==="cpf"?"000.000.000-00":"00.000.000/0001-00"} value={form.cnpjCpf} error={errors.cnpjCpf} onChange={e=>set("cnpjCpf",form.documentoTipo==="cpf"?maskCPF(e.target.value):maskCNPJ(e.target.value))}/>
             <Inp label="E-mail *" type="email" placeholder="contato@estabelecimento.com" maxLength={120} value={form.email} error={errors.email} onChange={e=>set("email",e.target.value)}/>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Inp label="Senha *" type="password" value={form.senha} error={errors.senha} onChange={e=>set("senha",e.target.value)}/><Inp label="Confirmar senha *" type="password" value={form.confirmaSenha} error={errors.confirmaSenha} onChange={e=>set("confirmaSenha",e.target.value)}/></div>
             <Inp label="WhatsApp *" placeholder="(75) 99000-0000" value={form.whatsapp} error={errors.whatsapp} onChange={e=>set("whatsapp",maskPhone(e.target.value))}/>
             <Inp label="Endereço no Centro de Abastecimento *" placeholder="Setor, corredor ou loja" maxLength={200} value={form.endereco} error={errors.endereco} onChange={e=>set("endereco",e.target.value)}/>
-            <Sel label="Horário de funcionamento *" value={form.horario} error={errors.horario} onChange={e=>set("horario",e.target.value)}><option value="">Selecione</option>{horarioOpts.map(h=><option key={h} value={h}>{h}</option>)}</Sel>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Inp label="Abre às *" type="time" value={form.abre} error={errors.abre} onChange={e=>{set("abre",e.target.value);set("horario",`${e.target.value} às ${form.fecha||"--:--"}`)}}/><Inp label="Fecha às *" type="time" value={form.fecha} error={errors.fecha} onChange={e=>{set("fecha",e.target.value);set("horario",`${form.abre||"--:--"} às ${e.target.value}`)}}/></div>
             <Btn onClick={()=>{ if(validateStep1())setStep(2); }} className="w-full mt-2">Próximo</Btn>
           </div>
         )}
@@ -812,12 +824,12 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
   const outraParte = pendingProposta ? (pendingProposta.proponenteId===user.id ? usuarios.find(u=>u.id===listagens.find(l=>l.id===pendingProposta.listagemId)?.usuarioId) : usuarios.find(u=>u.id===pendingProposta.proponenteId)) : null;
 
   return (
-    <div className="px-4 py-5 max-w-2xl mx-auto space-y-6">
+    <div className="px-4 py-5 max-w-2xl md:max-w-5xl mx-auto space-y-6">
       <div><p className="text-sm text-muted-foreground">Bem-vindo</p><h1 className="text-xl font-black text-foreground">{user.responsavel.split(" ")[0]}</h1><p className="text-xs text-muted-foreground mt-0.5">{user.nome}</p></div>
 
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Resumo da sua operação</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4">
           {[
             { icon: Package, value: minhasAtivas.length, label: "Publicações ativas" },
             { icon: MessageSquare, value: aguardandoResposta.length, label: "Propostas recebidas" },
@@ -957,7 +969,7 @@ function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo }: 
     return true;
   });
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl md:max-w-5xl mx-auto">
       <div className="px-4 py-3 border-b border-border bg-background sticky top-0 z-10">
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {(["todos","oferta","pedido"] as const).map(t=><button key={t} onClick={()=>setFiltroTipo(t)} className={`px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 transition-colors ${filtroTipo===t?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground"}`}>{t==="todos"?"Todos":t==="oferta"?"Ofertas":"Pedidos"}</button>)}
@@ -974,7 +986,7 @@ function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo }: 
       <div className="px-4 py-4">
         {filtered.length===0
           ? <div className="text-center py-16 text-muted-foreground"><Package className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-sm">Nenhuma publicação com esses filtros.</p></div>
-          : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">{filtered.map(l=><ListagemCard key={l.id} l={l} usuarios={usuarios} alimentosBD={alimentosBD} onClick={()=>navTo("detalhes",l.id,"listagens")}/>)}</div>
+          : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">{filtered.map(l=><ListagemCard key={l.id} l={l} usuarios={usuarios} alimentosBD={alimentosBD} onClick={()=>navTo("detalhes",l.id,"listagens")}/>)}</div>
         }
       </div>
     </div>
@@ -988,7 +1000,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
   alimentosBD: AlimentoBD[]; categorias: CategoriaAlimento[];
 }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ tipo:"oferta" as TipoListagem, alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, prazo:"", observacao:"", fotoOk:false });
+  const [form, setForm] = useState({ tipo:"oferta" as TipoListagem, alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, prazo:"", observacao:"", fotoUrl:"" });
   const [errors, setErrors] = useState<Errors>({});
   const alimentosAtivos = alimentosBD.filter(a=>a.ativo);
   const catsAtivas = categorias.filter(c=>c.ativa);
@@ -1002,11 +1014,11 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
   }
   function submit() {
     const e: Errors = {};
-    if(!form.fotoOk)e.foto="A foto do lote é obrigatória.";
+    if(!form.fotoUrl)e.foto="A foto do lote é obrigatória.";
     if(form.observacao.length>140)e.observacao="Máximo 140 caracteres.";
     setErrors(e); if(Object.keys(e).length>0)return;
     const alim = alimentosBD.find(a=>a.id===form.alimento);
-    onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:alim?.imagemUrl??null, status:"ativa" });
+    onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:form.fotoUrl || alim?.imagemUrl || null, status:"ativa" });
   }
 
   return (
@@ -1057,9 +1069,10 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
           <h2 className="font-bold text-foreground text-lg">Foto e observação</h2>
           <div>
             <p className="text-sm font-semibold text-foreground mb-1.5">Foto do lote *</p>
-            <button type="button" onClick={()=>{setForm(f=>({...f,fotoOk:!f.fotoOk}));setErrors(er=>{const n={...er};delete n.foto;return n;});}} className={`w-full border-2 border-dashed rounded-xl py-8 text-center transition-colors ${form.fotoOk?"border-primary bg-primary/5":errors.foto?"border-[#E85D4E]":"border-border"}`}>
-              {form.fotoOk?<div><CheckCircle2 className="w-8 h-8 text-primary mx-auto mb-2"/><p className="text-sm font-semibold text-primary">Foto adicionada</p></div>:<div><Camera className="w-8 h-8 text-muted-foreground mx-auto mb-2"/><p className="text-sm text-muted-foreground">Toque para adicionar foto</p></div>}
-            </button>
+            <label className={`block w-full border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-colors ${form.fotoUrl?"border-primary bg-primary/5":errors.foto?"border-[#E85D4E]":"border-border"}`}>
+              <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{setForm(f=>({...f,fotoUrl:String(reader.result)}));setErrors(er=>{const n={...er};delete n.foto;return n;});};reader.readAsDataURL(file);}}/>
+              {form.fotoUrl?<img src={form.fotoUrl} alt="Pré-visualização do lote" className="h-40 w-full rounded-lg object-cover"/>:<div className="py-5"><ImagePlus className="w-8 h-8 text-muted-foreground mx-auto mb-2"/><p className="text-sm text-muted-foreground">Toque para escolher uma foto</p></div>}
+            </label>
             {errors.foto&&<p className="text-xs text-[#E85D4E] mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{errors.foto}</p>}
           </div>
           <Txa label="Observação (opcional, máx. 140 caracteres)" placeholder="Detalhe curto sobre o lote..." maxLength={140} rows={3} value={form.observacao} error={errors.observacao} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}/>
@@ -1219,7 +1232,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
   const [checkEmbalagem, setCheckEmbalagem] = useState(false);
   const [checkContaminacao, setCheckContaminacao] = useState(false);
 
-  const [pForm, setPForm] = useState({ alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, observacao:"" });
+  const [pForm, setPForm] = useState({ modo:"equivalente" as "equivalente"|"quantidade"|"outro", alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, observacao:"" });
   const [pErrors, setPErrors] = useState<Errors>({});
   const [agForm, setAgForm] = useState({ data:"", horario:"", local:"" });
   const [agErrors, setAgErrors] = useState<Errors>({});
@@ -1259,14 +1272,14 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
 
   function submitProposta() {
     const e: Errors = {};
-    if(!pForm.alimento)e.alimento="Selecione um alimento.";
-    const qErr=validateQtd(pForm.quantidade); if(qErr)e.quantidade=qErr;
-    if(!pForm.maturacao)e.maturacao="Selecione a maturação.";
+    if(pForm.modo!=="equivalente"&&!pForm.alimento)e.alimento="Selecione um alimento.";
+    const quantidadeG=pForm.modo==="equivalente"?listagem.quantidadeG:toGrams(Number(pForm.quantidade),pForm.unidade);
+    if(pForm.modo!=="equivalente"){const qErr=validateQtd(pForm.quantidade);if(qErr)e.quantidade=qErr;if(quantidadeG>listagem.quantidadeG*1.2)e.quantidade="A quantidade pode ser no máximo 20% maior que a publicação.";}
+    if(pForm.modo!=="equivalente"&&!pForm.maturacao)e.maturacao="Selecione a maturação.";
     setPErrors(e); if(Object.keys(e).length>0)return;
-    const quantidadeG=toGrams(Number(pForm.quantidade),pForm.unidade);
     const pai=cadeia.length>0?ultima.id:null;
-    onAddProposta({ listagemId, propostaPaiId:pai, versao:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.alimento,quantidadeG,maturacao:pForm.maturacao as Maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG,maturacao:listagem.maturacao,observacao:null} });
-    setShowPForm(false); setPForm({alimento:"",quantidade:"",unidade:"kg",maturacao:"",observacao:""});
+    onAddProposta({ listagemId, propostaPaiId:pai, versao:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.modo==="equivalente"?listagem.alimento:pForm.alimento,quantidadeG,maturacao:pForm.modo==="equivalente"?listagem.maturacao:pForm.maturacao as Maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG:listagem.quantidadeG,maturacao:listagem.maturacao,observacao:null} });
+    setShowPForm(false); setPForm({modo:"equivalente",alimento:"",quantidade:"",unidade:"kg",maturacao:"",observacao:""});
   }
 
   function submitAgendamento() {
@@ -1315,7 +1328,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
   const alimentosAtivos = alimentosBD.filter(a=>a.ativo);
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl md:max-w-4xl mx-auto">
       {listagem.fotoUrl && (
         <div className="h-52 md:h-64 overflow-hidden bg-muted relative">
           <img src={listagem.fotoUrl} alt={nomeAlimento(listagem.alimento, alimentosBD)} className="w-full h-full object-cover"/>
@@ -1326,9 +1339,9 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
       <div className="px-4 py-5 space-y-5">
         {/* Header */}
         <div>
-          <div className="flex items-start justify-between gap-3">
-            <div><p className="text-xs font-bold uppercase tracking-widest mb-0.5" style={{color:listagem.tipo==="oferta"?"#2F6B5E":"#B87A00"}}>{listagem.tipo}</p><h1 className="text-2xl font-black text-foreground">{nomeAlimento(listagem.alimento, alimentosBD)}</h1></div>
-            <div className="text-right"><p className="text-2xl font-black text-foreground">{fmtQtd(listagem.quantidadeG)}</p><p className="text-xs text-muted-foreground mt-1">{MAT[listagem.maturacao].label}</p></div>
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+            <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-widest mb-0.5" style={{color:listagem.tipo==="oferta"?"#2F6B5E":"#B87A00"}}>{listagem.tipo}</p><h1 className="text-2xl font-black text-foreground break-words">{nomeAlimento(listagem.alimento, alimentosBD)}</h1></div>
+            <div className="text-left sm:text-right"><p className="text-2xl font-black text-foreground whitespace-nowrap">{fmtQtd(listagem.quantidadeG)}</p><p className="text-xs text-muted-foreground mt-1">{MAT[listagem.maturacao].label}</p></div>
           </div>
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
             <span>Disponível até {fmtDate(listagem.prazo)}</span>
@@ -1360,8 +1373,8 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
         {/* Dono + Chat */}
         <div className="flex items-center justify-between py-3 border-y border-border">
           <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${dono?.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>{dono?.nome.charAt(0)}</div>
-            <div><p className="text-sm font-semibold text-foreground">{dono?.nome}</p><p className="text-xs text-muted-foreground">{dono?.responsavel} · {dono?.horario}</p></div>
+            <div className={`w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${dono?.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>{dono?.fotoUrl?<img src={dono.fotoUrl} alt={dono.nome} className="w-full h-full object-cover"/>:dono?.nome.charAt(0)}</div>
+            <div className="min-w-0"><p className="text-sm font-semibold text-foreground truncate">{dono?.nome}</p><p className="text-xs text-muted-foreground truncate">{dono?.responsavel} · {dono?.horario}</p></div>
           </div>
           {podeVerChat && (
             <Btn size="sm" variant="secondary" onClick={()=>onOpenChat(rootProposta.id)}>
@@ -1496,18 +1509,19 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
           showPForm ? (
             <div className="border border-border rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between"><p className="font-bold text-foreground">{cadeia.length>0?"Contraproposta":"Proposta de troca"}</p><button onClick={()=>setShowPForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><button type="button" onClick={()=>setPForm(f=>({...f,modo:"equivalente",alimento:listagem.alimento,quantidade:""}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="equivalente"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Troca equivalente<p className="font-normal mt-1">Mesmo alimento e peso</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"quantidade"}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="quantidade"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Ajustar peso<p className="font-normal mt-1">Até 20% a mais</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"outro"}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="outro"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Outro alimento<p className="font-normal mt-1">Escolha o que oferecer</p></button></div>
               <div className="bg-primary/5 rounded-xl p-4 space-y-3">
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Eu ofereço</p>
-                <Sel value={pForm.alimento} error={pErrors.alimento} onChange={e=>{setPForm(f=>({...f,alimento:e.target.value}));setPErrors(er=>{const n={...er};delete n.alimento;return n;});}}>
+                {pForm.modo!=="equivalente"&&<Sel value={pForm.alimento} error={pErrors.alimento} onChange={e=>{setPForm(f=>({...f,alimento:e.target.value}));setPErrors(er=>{const n={...er};delete n.alimento;return n;});}}>
                   <option value="">Selecione o alimento</option>
                   {cats.map(catId=>{ const cat=INIT_CATEGORIAS.find(c=>c.id===catId); return <optgroup key={catId} label={cat?.nome??catId}>{alimentosAtivos.filter(a=>a.categoriaId===catId).map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}</optgroup>; })}
-                </Sel>
-                <div className="flex gap-2">
+                </Sel>}
+                {pForm.modo!=="equivalente"&&<div className="flex gap-2">
                   <input type="number" min="0" step="any" placeholder="Quantidade" value={pForm.quantidade} onChange={e=>{setPForm(f=>({...f,quantidade:e.target.value}));setPErrors(er=>{const n={...er};delete n.quantidade;return n;});}} className={`flex-1 px-3 py-3 rounded-lg border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition ${pErrors.quantidade?"border-[#E85D4E]":"border-border"}`}/>
                   <select value={pForm.unidade} onChange={e=>setPForm(f=>({...f,unidade:e.target.value as Unidade}))} className="px-3 py-3 rounded-lg border border-border bg-white text-sm focus:outline-none"><option value="kg">kg</option><option value="g">g</option></select>
-                </div>
+                </div>}
                 {pErrors.quantidade&&<p className="text-xs text-[#E85D4E]">{pErrors.quantidade}</p>}
-                {pForm.quantidade&&!pErrors.quantidade&&<p className="text-xs text-muted-foreground">Equivale a {fmtQtd(toGrams(Number(pForm.quantidade),pForm.unidade))}</p>}
+                <p className="text-xs text-muted-foreground">{pForm.modo==="equivalente"?`Equivalente a ${fmtQtd(listagem.quantidadeG)}`:pForm.quantidade?`Equivale a ${fmtQtd(toGrams(Number(pForm.quantidade),pForm.unidade))}. Limite: ${fmtQtd(Math.round(listagem.quantidadeG*1.2))}`:"Informe o peso desejado"}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["verde","meio-maduro","maduro","muito-maduro"] as const).map(m=><button key={m} type="button" onClick={()=>setPForm(f=>({...f,maturacao:m}))} className={`flex items-center gap-2 py-2 px-2.5 rounded-lg border text-xs font-semibold transition-colors ${pForm.maturacao===m?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}><span className="w-2 h-2 rounded-full" style={{backgroundColor:MAT[m].cor}}/>{MAT[m].label}</button>)}
                 </div>
@@ -1611,7 +1625,7 @@ function MinhasTrocasView({ user, listagens, propostas, usuarios, encontros, ali
   eventos.forEach(e=>{ const d=new Date(e.data).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}); if(!grupos[d])grupos[d]=[]; grupos[d].push(e); });
   if(eventos.length===0)return(<div className="px-4 py-16 text-center text-muted-foreground max-w-lg mx-auto"><RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-sm">Nenhuma atividade ainda.</p></div>);
   return (
-    <div className="max-w-2xl mx-auto px-4 py-5">
+    <div className="max-w-2xl md:max-w-4xl mx-auto px-4 py-5">
       {Object.entries(grupos).map(([data,evs])=>(
         <div key={data} className="mb-6">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">{data}</p>
@@ -1664,6 +1678,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const [novaCategoria, setNovaCategoria] = useState("");
   const [editingCategoria, setEditingCategoria] = useState<string|null>(null);
   const [catEditNome, setCatEditNome] = useState("");
+  const [paginaConfirmacoes, setPaginaConfirmacoes] = useState(0);
 
   const pendentes=usuarios.filter(u=>u.status==="pendente");
   const aprovados=usuarios.filter(u=>u.status==="aprovado"&&u.id!=="admin");
@@ -1672,6 +1687,10 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const divergencias=propostas.filter(p=>p.status==="divergencia");
   const confirmacoesPendentes=propostas.filter(p=>isConfirmacaoPendente(p,encontros)&&p.confirmacoes.length<2);
   const encontrosAgendados=encontros.filter(e=>{ const p=propostas.find(x=>x.id===e.propostaId); return p?.status==="encontro-agendado"; });
+  const confirmacoesPorPagina = 3;
+  const totalPaginasConfirmacoes = Math.max(1, Math.ceil(confirmacoesPendentes.length / confirmacoesPorPagina));
+  const paginaAtualConfirmacoes = Math.min(paginaConfirmacoes, totalPaginasConfirmacoes - 1);
+  const confirmacoesVisiveis = confirmacoesPendentes.slice(paginaAtualConfirmacoes * confirmacoesPorPagina, (paginaAtualConfirmacoes + 1) * confirmacoesPorPagina);
 
   function execModal() {
     if(!modal)return;
@@ -1692,7 +1711,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   ];
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl xl:max-w-6xl mx-auto">
       <div className="border-b border-border bg-background sticky top-0 z-10 px-4">
         <div className="flex gap-1 overflow-x-auto py-2">
           {TABS.map(t=><button key={t.key} onClick={()=>setTab(t.key)} className={`px-3 py-2 rounded-lg text-xs font-bold flex-shrink-0 transition-colors ${tab===t.key?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-muted"}`}>{t.label}</button>)}
@@ -1716,9 +1735,9 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
                 )}
                 {confirmacoesPendentes.length>0&&(
                   <div className="bg-[#E85D4E]/10 border border-[#E85D4E]/30 rounded-xl p-4">
-                    <p className="text-xs font-bold text-[#E85D4E] uppercase tracking-widest mb-2">Confirmações pendentes</p>
-                    {confirmacoesPendentes.map(p=>{ const l=listagens.find(x=>x.id===p.listagemId); const e=encontros.find(x=>x.propostaId===p.id); const prop=usuarios.find(u=>u.id===p.proponenteId); const dono=usuarios.find(u=>u.id===l?.usuarioId); const propConf=p.confirmacoes.find(c=>c.usuarioId===p.proponenteId); const donoConf=p.confirmacoes.find(c=>c.usuarioId===l?.usuarioId); return (
-                      <div key={p.id} className="py-3 border-b border-[#E85D4E]/20 last:border-0">
+                    <div className="flex items-center justify-between gap-3 mb-2"><p className="text-xs font-bold text-[#E85D4E] uppercase tracking-widest">Confirmações pendentes</p>{totalPaginasConfirmacoes>1&&<span className="text-[11px] font-semibold text-[#E85D4E]">Página {paginaAtualConfirmacoes+1} de {totalPaginasConfirmacoes}</span>}</div>
+                    {confirmacoesVisiveis.map(p=>{ const l=listagens.find(x=>x.id===p.listagemId); const e=encontros.find(x=>x.propostaId===p.id); const prop=usuarios.find(u=>u.id===p.proponenteId); const dono=usuarios.find(u=>u.id===l?.usuarioId); const propConf=p.confirmacoes.find(c=>c.usuarioId===p.proponenteId); const donoConf=p.confirmacoes.find(c=>c.usuarioId===l?.usuarioId); return (
+                      <div key={p.id} className="py-3 border-b border-[#E85D4E]/20 last:border-0 min-w-0">
                         <p className="text-sm font-semibold text-foreground">{prop?.nome} com {dono?.nome}</p>
                         {e&&<p className="text-xs text-muted-foreground">{fmtDateShort(e.data)} às {e.horario}</p>}
                         <div className="flex gap-3 mt-1.5">
@@ -1730,6 +1749,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
                         </div>
                       </div>
                     ); })}
+                    {totalPaginasConfirmacoes>1&&<div className="flex items-center justify-between pt-3"><button type="button" disabled={paginaAtualConfirmacoes===0} onClick={()=>setPaginaConfirmacoes(paginaAtualConfirmacoes-1)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#E85D4E] disabled:opacity-40"><ChevronLeft className="w-4 h-4"/>Anterior</button><button type="button" disabled={paginaAtualConfirmacoes===totalPaginasConfirmacoes-1} onClick={()=>setPaginaConfirmacoes(paginaAtualConfirmacoes+1)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#E85D4E] disabled:opacity-40">Próxima<ChevronRight className="w-4 h-4"/></button></div>}
                   </div>
                 )}
               </div>
@@ -1754,13 +1774,17 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
                 ))}
               </div>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Publicações por tipo</p><div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={[{nome:"Ofertas",total:listagens.filter(l=>l.tipo==="oferta").length},{nome:"Pedidos",total:listagens.filter(l=>l.tipo==="pedido").length}]}><XAxis dataKey="nome" tick={{fontSize:11}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Bar dataKey="total" fill="#2F6B5E" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>
+              <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Status das trocas</p><div className="h-52"><ResponsiveContainer width="100%" height="100%"><BarChart layout="vertical" data={[{nome:"Em negociação",total:propostas.filter(p=>["proposto","contraproposto"].includes(p.status)).length,cor:"#E8A33D"},{nome:"Agendadas",total:propostas.filter(p=>p.status==="encontro-agendado").length,cor:"#ca8a04"},{nome:"Concluídas",total:propostas.filter(p=>p.status==="concluido").length,cor:"#2F6B5E"},{nome:"Com problema",total:propostas.filter(p=>["divergencia","nao-compareceu","cancelado"].includes(p.status)).length,cor:"#E85D4E"}]} margin={{left:8,right:12}}><XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/><YAxis type="category" dataKey="nome" width={92} tick={{fontSize:10}}/><Tooltip formatter={(value)=>[value,"Trocas"]}/><Bar dataKey="total" radius={[0,4,4,0]}>{["#E8A33D","#ca8a04","#2F6B5E","#E85D4E"].map(c=><Cell key={c} fill={c}/>)}</Bar></BarChart></ResponsiveContainer></div></div>
+            </div>
             {encontrosAgendados.length>0&&(
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Encontros agendados</p>
                 <div className="divide-y divide-border">
                   {encontrosAgendados.map(e=>{ const p=propostas.find(x=>x.id===e.propostaId); const l=p?listagens.find(x=>x.id===p.listagemId):null; const prop=p?usuarios.find(u=>u.id===p.proponenteId):null; const dono=l?usuarios.find(u=>u.id===l.usuarioId):null; const passado=isDiaEncontroPassado(e); return (
-                    <div key={e.id} className="py-3 flex items-start justify-between gap-3">
-                      <div><p className="text-sm font-semibold text-foreground">{prop?.nome} com {dono?.nome}</p><p className="text-xs text-muted-foreground">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p></div>
+                    <div key={e.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground break-words">{prop?.nome} com {dono?.nome}</p><p className="text-xs text-muted-foreground break-words">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p></div>
                       <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${passado?"bg-red-50 text-[#E85D4E]":"bg-amber-50 text-amber-700"}`}>{passado?"Aguard. confirmação":"Agendado"}</span>
                     </div>
                   ); })}
@@ -1778,8 +1802,8 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
                 <div className="space-y-3">
                   {pendentes.map(u=>(
                     <div key={u.id} className="bg-card border border-border rounded-xl p-4">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div><p className="font-bold text-foreground">{u.nome}</p><p className="text-xs text-muted-foreground capitalize">{u.tipo} · {u.responsavel}</p></div>
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0"><p className="font-bold text-foreground break-words">{u.nome}</p><p className="text-xs text-muted-foreground capitalize break-words">{u.tipo} · {u.responsavel}</p></div>
                         <div className="flex gap-2 flex-shrink-0"><Btn size="sm" onClick={()=>onApprove(u.id)}><Check className="w-3.5 h-3.5"/>Aprovar</Btn><Btn size="sm" variant="danger" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3.5 h-3.5"/></Btn></div>
                       </div>
                       <div className="text-xs text-muted-foreground space-y-1">
@@ -1796,7 +1820,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
               <div className="divide-y divide-border">
                 {aprovados.map(u=>(
                   <div key={u.id} className="py-4">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${u.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>{u.nome.charAt(0)}</div>
                         <div className="min-w-0"><p className="text-sm font-semibold text-foreground truncate">{u.nome}</p><p className="text-xs text-muted-foreground">{u.responsavel} · {u.tipo}</p></div>
@@ -1864,8 +1888,8 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
             <div className="divide-y divide-border">
               {propostas.map(p=>{ const l=listagens.find(x=>x.id===p.listagemId); const prop=usuarios.find(u=>u.id===p.proponenteId); const dono=usuarios.find(u=>u.id===l?.usuarioId); const e=encontros.find(x=>x.propostaId===p.id); const pend=isConfirmacaoPendente(p,encontros); const lbl=pend?"Confirmação pendente":STATUS_LABEL[p.status]; const cor=pend?"#E85D4E":STATUS_COR[p.status]; return (
                 <div key={p.id} className="py-4 space-y-1.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:cor}}/><p className="text-sm font-bold text-foreground">{nomeAlimento(p.oferecem.alimento,alimentosBD)} por {nomeAlimento(p.querem.alimento,alimentosBD)}</p></div>
                       <p className="text-xs text-muted-foreground">{fmtQtd(p.oferecem.quantidadeG)} · {prop?.nome} com {dono?.nome}</p>
                       {e&&<p className="text-xs text-muted-foreground">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p>}
@@ -2010,7 +2034,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
 
 function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
   user: Usuario; onLogout: ()=>void;
-  onUpdatePerfil: (u: Partial<Usuario>)=>void; alimentosBD: AlimentoBD[];
+  onUpdatePerfil: (u: Partial<Usuario>)=>void | Promise<void>; alimentosBD: AlimentoBD[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ responsavel:user.responsavel, whatsapp:user.whatsapp, email:user.email, endereco:user.endereco, horario:user.horario });
@@ -2029,7 +2053,11 @@ function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
   return (
     <div className="max-w-lg mx-auto px-4 py-5">
       <div className="flex items-center gap-4 pb-5 border-b border-border">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-2xl font-black flex-shrink-0 ${user.tipo==="restaurante"?"bg-primary":user.tipo==="admin"?"bg-[#E85D4E]":"bg-[#E8A33D]"}`}>{user.id==="admin"?<Shield className="w-6 h-6"/>:user.nome.charAt(0)}</div>
+        <label className="group relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white text-2xl font-black flex-shrink-0 bg-primary cursor-pointer ring-offset-2 focus-within:ring-2 focus-within:ring-primary" title="Alterar foto do perfil">
+          <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>onUpdatePerfil({fotoUrl:String(reader.result)});reader.readAsDataURL(file);}}/>
+          {user.fotoUrl?<img src={user.fotoUrl} alt={user.nome} className="w-full h-full object-cover"/>:user.id==="admin"?<Shield className="w-6 h-6"/>:user.nome.charAt(0)}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"><Camera className="w-5 h-5"/><span className="sr-only">Alterar foto</span></span>
+        </label>
         <div className="flex-1 min-w-0"><p className="font-extrabold text-foreground text-lg leading-tight truncate">{user.nome}</p><p className="text-sm text-muted-foreground capitalize">{user.tipo}</p><span className="text-xs font-semibold text-[#2F6B5E] bg-teal-50 px-2 py-0.5 rounded-full inline-block mt-1">Aprovado</span></div>
         {!isEditing&&<Btn size="sm" variant="secondary" onClick={()=>{setForm({responsavel:user.responsavel,whatsapp:user.whatsapp,email:user.email,endereco:user.endereco,horario:user.horario});setIsEditing(true);}}><Pencil className="w-3.5 h-3.5"/>Editar</Btn>}
       </div>
@@ -2044,7 +2072,7 @@ function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {[{label:"Responsável",val:user.responsavel,icon:User},{label:user.tipo==="restaurante"?"CPF":"CNPJ",val:user.cnpjCpf,icon:ClipboardList},{label:"E-mail",val:user.email,icon:Eye},{label:"Endereço",val:user.endereco,icon:MapPin},{label:"Horário",val:user.horario,icon:Clock}].map(item=>(
+          {[{label:"Responsável",val:user.responsavel,icon:User},{label:(user.documentoTipo??"cnpj").toUpperCase(),val:user.cnpjCpf,icon:ClipboardList},{label:"E-mail",val:user.email,icon:Eye},{label:"Endereço",val:user.endereco,icon:MapPin},{label:"Horário",val:user.horario,icon:Clock}].map(item=>(
             <div key={item.label} className="flex items-center gap-3 py-4">
               <item.icon className="w-4 h-4 text-muted-foreground flex-shrink-0"/>
               <div><p className="text-xs text-muted-foreground">{item.label}</p><p className="text-sm font-semibold text-foreground">{item.val}</p></div>
@@ -2097,9 +2125,43 @@ export default function App() {
 
   function handleLogin(u: Usuario) { setUser(u); setView(u.id==="admin"?"admin":"dashboard"); }
   function handleLogout() { setUser(null); setView("landing"); }
-  function handleRegistro(data: Partial<Usuario>) {
-    const novo: Usuario = { id:genId(), nome:data.nome!, tipo:data.tipo!, cnpjCpf:data.cnpjCpf!, email:data.email??"", endereco:data.endereco!, whatsapp:data.whatsapp!, responsavel:data.responsavel!, alimentosInteresse:data.alimentosInteresse??[], horario:data.horario!, status:"pendente", criadoEm:new Date().toISOString() };
-    setUsuarios(p=>[...p,novo]); setView("landing"); showToast("Cadastro enviado. Aguarde aprovação.");
+  function traduzirErroAuth(message?: string): string {
+    const texto = message?.toLowerCase() ?? "";
+    if (texto.includes("user already registered") || texto.includes("already been registered")) return "Este e-mail já está cadastrado.";
+    if (texto.includes("password should be at least")) return "A senha deve ter pelo menos 6 caracteres.";
+    if (texto.includes("invalid email")) return "Informe um e-mail válido.";
+    if (texto.includes("rate limit")) return "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+    if (texto.includes("email not confirmed")) return "Confirme seu e-mail antes de entrar.";
+    return message ?? "Não foi possível concluir o cadastro.";
+  }
+  async function handleRegistro(data: Partial<Usuario>) {
+    if (!supabase) {
+      showToast("Configure o Supabase no arquivo .env antes de criar uma conta.");
+      return;
+    }
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email!,
+      password: data.senha!,
+      options: {
+        data: {
+          name: data.nome,
+          type: data.tipo,
+          document: data.cnpjCpf,
+          document_type: data.documentoTipo,
+          address: data.endereco,
+          whatsapp: data.whatsapp,
+          responsible: data.responsavel,
+          interests: data.alimentosInteresse ?? [],
+          opening_hours: data.horario,
+        },
+      },
+    });
+    if (error || !authData.user) {
+      showToast(traduzirErroAuth(error?.message));
+      return;
+    }
+    const novo: Usuario = { id:genId(), nome:data.nome!, tipo:data.tipo!, documentoTipo:data.documentoTipo as TipoDocumento, cnpjCpf:data.cnpjCpf!, email:data.email??"", senha:data.senha, endereco:data.endereco!, whatsapp:data.whatsapp!, responsavel:data.responsavel!, alimentosInteresse:data.alimentosInteresse??[], horario:data.horario!, status:"pendente", criadoEm:new Date().toISOString() };
+    setUsuarios(p=>[...p,novo]); setView("landing"); showToast("Cadastro realizado. Aguarde a aprovação do administrador.");
   }
 
   function handleAddListagem(data: Partial<Listagem>) {
@@ -2191,7 +2253,14 @@ export default function App() {
   function handleAddCategoria(nome: string) { setCategorias(p=>[...p,{id:genId(),nome,ativa:true}]); }
   function handleEditCategoria(id: string, nome: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,nome}:c)); }
   function handleToggleCategoria(id: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,ativa:!c.ativa}:c)); }
-  function handleUpdatePerfil(updates: Partial<Usuario>) { if(!user)return; setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast("Dados atualizados."); }
+  async function handleUpdatePerfil(updates: Partial<Usuario>) {
+    if(!user)return;
+    if(supabase && user.id!=="admin" && updates.fotoUrl){
+      const { error } = await supabase.from("profiles").update({ avatar_url: updates.fotoUrl }).eq("id", user.id);
+      if(error){ showToast("Não foi possível salvar a foto no Supabase."); return; }
+    }
+    setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast(updates.fotoUrl?"Foto do perfil salva.":"Dados atualizados.");
+  }
 
   const viewTitles: Partial<Record<View,string>> = { dashboard:"Feira Circular", listagens:"Listagens", "minhas-trocas":"Minhas Trocas", "nova-listagem":"Nova publicação", admin:"Administração", perfil:"Perfil", chat:"Chat" };
   const topBarTitle = view==="detalhes"&&selectedId ? nomeAlimento(listagens.find(l=>l.id===selectedId)?.alimento??"",alimentosBD) : viewTitles[view]??"";
@@ -2236,7 +2305,7 @@ export default function App() {
       )}
 
       <div className="flex h-dvh min-h-screen bg-background overflow-hidden">
-        <div className="hidden md:flex w-52 flex-shrink-0 min-h-0">
+        <div className="hidden md:flex w-60 flex-shrink-0 min-h-0">
           <Sidebar user={user} view={view} setView={setView} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)} onLogout={handleLogout} adminTab={adminTab} setAdminTab={setAdminTab}/>
         </div>
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">

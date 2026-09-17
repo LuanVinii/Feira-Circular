@@ -2235,13 +2235,13 @@ export default function App() {
         />
       )}
 
-      <div className="flex h-screen bg-background overflow-hidden">
-        <div className="hidden md:flex w-52 flex-shrink-0 h-full">
+      <div className="flex h-dvh min-h-screen bg-background overflow-hidden">
+        <div className="hidden md:flex w-52 flex-shrink-0 min-h-0">
           <Sidebar user={user} view={view} setView={setView} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)} onLogout={handleLogout} adminTab={adminTab} setAdminTab={setAdminTab}/>
         </div>
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           <TopBar title={topBarTitle} onBack={isNested?()=>{ if(view==="chat")setView(fromView||"detalhes"); else setView(fromView); }:undefined} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)}/>
-          <div className={`flex-1 overflow-y-auto ${!isNested?"pb-20 md:pb-0":""}`}>
+          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${!isNested?"pb-20 md:pb-0":""}`}>
             {renderMain()}
           </div>
         </div>

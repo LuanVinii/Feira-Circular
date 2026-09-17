@@ -509,7 +509,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
     return (
       <aside className="bg-primary flex flex-col h-full w-full">
         <div className="p-5 pb-4 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-[#E85D4E]"/><div><p className="font-black text-primary-foreground text-xs">Painel Admin</p><p className="font-bold text-primary-foreground/60 text-[10px]">Centro de Troca</p></div></div>
+          <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-[#E85D4E]"/><div><p className="font-black text-primary-foreground text-xs">Painel Admin</p><p className="font-bold text-primary-foreground/60 text-[10px]">Feira Circular</p></div></div>
           <button onClick={onNotif} className="relative text-primary-foreground/70 hover:text-primary-foreground"><Bell className="w-4 h-4"/>{notifCount>0&&<span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E85D4E] rounded-full text-[9px] font-bold flex items-center justify-center">{notifCount}</span>}</button>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -540,7 +540,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
   return (
     <aside className="bg-primary flex flex-col h-full w-full">
       <div className="p-5 pb-4 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-2"><Leaf className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/><div><p className="font-black text-primary-foreground text-xs">Centro de Troca</p><p className="font-bold text-primary-foreground/60 text-[10px]">de Hortifrúti</p></div></div>
+        <div className="flex items-center gap-2"><Leaf className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/><div><p className="font-black text-primary-foreground text-xs">Feira Circular</p><p className="font-bold text-primary-foreground/60 text-[10px]">Trocas de Hortifrúti</p></div></div>
         <button onClick={onNotif} className="relative text-primary-foreground/70 hover:text-primary-foreground"><Bell className="w-4 h-4"/>{notifCount>0&&<span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E85D4E] rounded-full text-[9px] font-bold flex items-center justify-center">{notifCount}</span>}</button>
       </div>
       <nav className="flex-1 p-2 space-y-0.5">
@@ -571,7 +571,7 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
           <div className="flex items-center gap-2 mb-6">
             <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Leaf className="w-4 h-4 text-[#E8A33D]"/></div>
             <div>
-              <p className="text-xs font-bold text-primary-foreground/80">Centro de Troca de Hortifrúti</p>
+              <p className="text-xs font-bold text-primary-foreground/80">Feira Circular</p>
               <p className="text-[10px] text-primary-foreground/50 flex items-center gap-1"><MapPin className="w-2.5 h-2.5"/>Centro de Abastecimento, Feira de Santana-BA</p>
             </div>
           </div>
@@ -670,7 +670,7 @@ function LoginView({ usuarios, onLogin, onRegistro, onBack }: { usuarios: Usuari
     <div className="min-h-screen bg-background flex flex-col">
       <div className="bg-primary text-primary-foreground px-5 pt-12 pb-8">
         <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
-        <div className="flex items-center gap-2 mb-1"><Leaf className="w-4 h-4 text-[#E8A33D]"/><p className="text-xs font-semibold text-primary-foreground/60 uppercase tracking-widest">Centro de Troca de Hortifrúti</p></div>
+        <div className="flex items-center gap-2 mb-1"><Leaf className="w-4 h-4 text-[#E8A33D]"/><p className="text-xs font-semibold text-primary-foreground/60 uppercase tracking-widest">Feira Circular</p></div>
         <h1 className="text-2xl font-black text-primary-foreground">Selecione seu cadastro</h1>
         <p className="text-xs text-primary-foreground/40 mt-1">Demonstração de acesso</p>
       </div>
@@ -2193,7 +2193,7 @@ export default function App() {
   function handleToggleCategoria(id: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,ativa:!c.ativa}:c)); }
   function handleUpdatePerfil(updates: Partial<Usuario>) { if(!user)return; setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast("Dados atualizados."); }
 
-  const viewTitles: Partial<Record<View,string>> = { dashboard:"Centro de Troca", listagens:"Listagens", "minhas-trocas":"Minhas Trocas", "nova-listagem":"Nova publicação", admin:"Administração", perfil:"Perfil", chat:"Chat" };
+  const viewTitles: Partial<Record<View,string>> = { dashboard:"Feira Circular", listagens:"Listagens", "minhas-trocas":"Minhas Trocas", "nova-listagem":"Nova publicação", admin:"Administração", perfil:"Perfil", chat:"Chat" };
   const topBarTitle = view==="detalhes"&&selectedId ? nomeAlimento(listagens.find(l=>l.id===selectedId)?.alimento??"",alimentosBD) : viewTitles[view]??"";
 
   if (!user) {

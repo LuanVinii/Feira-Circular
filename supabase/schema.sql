@@ -166,3 +166,36 @@ insert into public.categories (id, name) values
   ('temperos', 'Temperos'),
   ('tuberculos', 'Tubérculos')
 on conflict (id) do nothing;
+
+insert into public.foods (id, name, category_id, active, image_url) values
+  ('tomate',    'Tomate',           'legumes',    true, 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600&h=400&fit=crop'),
+  ('cebola',    'Cebola',           'legumes',    true, 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=600&h=400&fit=crop'),
+  ('pimentao',  'Pimentão',         'legumes',    true, null),
+  ('quiabo',    'Quiabo',           'legumes',    true, 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&h=400&fit=crop'),
+  ('jilo',      'Jiló',             'legumes',    true, null),
+  ('berinjela', 'Berinjela',        'legumes',    true, null),
+  ('maxixe',    'Maxixe',           'legumes',    true, null),
+  ('abobora',   'Abóbora',          'legumes',    true, null),
+  ('cenoura',   'Cenoura',          'legumes',    true, 'https://images.unsplash.com/photo-1447175008436-054170c2e979?w=600&h=400&fit=crop'),
+  ('beterraba', 'Beterraba',        'legumes',    true, null),
+  ('alface',    'Alface',           'verduras',   true, null),
+  ('repolho',   'Repolho',          'verduras',   true, null),
+  ('coentro',   'Coentro',          'verduras',   true, null),
+  ('salsa',     'Salsinha',         'verduras',   true, null),
+  ('cebolinha', 'Cebolinha',        'verduras',   true, null),
+  ('pimenta',   'Pimenta de Cheiro','temperos',   true, null),
+  ('batata',    'Batata',           'tuberculos', true, null),
+  ('mandioca',  'Mandioca',         'tuberculos', true, null),
+  ('inhame',    'Inhame',           'tuberculos', true, null),
+  ('macaxeira', 'Macaxeira',        'tuberculos', true, null),
+  ('limao',     'Limão',            'frutas',     true, null),
+  ('laranja',   'Laranja',          'frutas',     true, 'https://images.unsplash.com/photo-1582979512210-99b6a53386f9?w=600&h=400&fit=crop'),
+  ('manga',     'Manga',            'frutas',     true, 'https://images.unsplash.com/photo-1601493700631-2b16ec4b4716?w=600&h=400&fit=crop'),
+  ('mamao',     'Mamão',            'frutas',     true, 'https://images.unsplash.com/photo-1526318472351-c75fcf070305?w=600&h=400&fit=crop'),
+  ('banana',    'Banana',           'frutas',     true, 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600&h=400&fit=crop'),
+  ('melancia',  'Melancia',         'frutas',     true, null),
+  ('abacaxi',   'Abacaxi',          'frutas',     true, 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=600&h=400&fit=crop'),
+  ('goiaba',    'Goiaba',           'frutas',     true, null),
+  ('acerola',   'Acerola',          'frutas',     true, null),
+  ('caju',      'Caju',             'frutas',     true, null)
+on conflict (id) do nothing;

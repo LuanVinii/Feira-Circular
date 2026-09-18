@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase";
+import { fetchCatalog, fetchPlatformState, fetchProfileById, type PlatformState } from "../lib/platform";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ type StatusTroca =
 type TipoListagem = "oferta" | "pedido";
 type StatusListagem = "ativa" | "em-negociacao" | "concluida" | "cancelada";
 type StatusUsuario = "pendente" | "aprovado" | "rejeitado" | "bloqueado";
-type AdminTab = "visao-geral" | "usuarios" | "publicacoes" | "trocas" | "ocorrencias" | "alimentos";
+type AdminTab = "visao-geral" | "confirmacoes" | "encontros" | "usuarios" | "publicacoes" | "trocas" | "ocorrencias" | "alimentos";
 type View =
   | "landing" | "login" | "registro" | "dashboard"
   | "listagens" | "detalhes" | "nova-listagem"
@@ -107,7 +108,12 @@ interface Notificacao {
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-const TODAY = "2026-08-15";
+function todayISO(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+const TODAY = todayISO();
+function isAdminUser(u: Usuario) { return u.tipo === "admin"; }
 
 const MAT: Record<Maturacao, { label: string; cor: string }> = {
   "verde":        { label: "Verde",        cor: "#16a34a" },
@@ -128,101 +134,6 @@ const STATUS_COR: Record<StatusTroca, string> = {
   "concluido": "#2F6B5E", "cancelado": "#9ca3af",
   "nao-compareceu": "#E85D4E", "divergencia": "#E85D4E",
 };
-
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-
-const INIT_CATEGORIAS: CategoriaAlimento[] = [
-  { id: "frutas",    nome: "Frutas",    ativa: true },
-  { id: "legumes",   nome: "Legumes",   ativa: true },
-  { id: "verduras",  nome: "Verduras",  ativa: true },
-  { id: "temperos",  nome: "Temperos",  ativa: true },
-  { id: "tuberculos",nome: "Tubérculos",ativa: true },
-];
-
-const INIT_ALIMENTOS_BD: AlimentoBD[] = [
-  { id: "tomate",    nome: "Tomate",          categoriaId: "legumes",    ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600&h=400&fit=crop" },
-  { id: "cebola",    nome: "Cebola",          categoriaId: "legumes",    ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=600&h=400&fit=crop" },
-  { id: "pimentao",  nome: "Pimentão",        categoriaId: "legumes",    ativo: true },
-  { id: "quiabo",    nome: "Quiabo",          categoriaId: "legumes",    ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&h=400&fit=crop" },
-  { id: "jilo",      nome: "Jiló",            categoriaId: "legumes",    ativo: true },
-  { id: "berinjela", nome: "Berinjela",       categoriaId: "legumes",    ativo: true },
-  { id: "maxixe",    nome: "Maxixe",          categoriaId: "legumes",    ativo: true },
-  { id: "abobora",   nome: "Abóbora",         categoriaId: "legumes",    ativo: true },
-  { id: "cenoura",   nome: "Cenoura",         categoriaId: "legumes",    ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1447175008436-054170c2e979?w=600&h=400&fit=crop" },
-  { id: "beterraba", nome: "Beterraba",       categoriaId: "legumes",    ativo: true },
-  { id: "alface",    nome: "Alface",          categoriaId: "verduras",   ativo: true },
-  { id: "repolho",   nome: "Repolho",         categoriaId: "verduras",   ativo: true },
-  { id: "coentro",   nome: "Coentro",         categoriaId: "verduras",   ativo: true },
-  { id: "salsa",     nome: "Salsinha",        categoriaId: "verduras",   ativo: true },
-  { id: "cebolinha", nome: "Cebolinha",       categoriaId: "verduras",   ativo: true },
-  { id: "pimenta",   nome: "Pimenta de Cheiro",categoriaId: "temperos",  ativo: true },
-  { id: "batata",    nome: "Batata",          categoriaId: "tuberculos", ativo: true },
-  { id: "mandioca",  nome: "Mandioca",        categoriaId: "tuberculos", ativo: true },
-  { id: "inhame",    nome: "Inhame",          categoriaId: "tuberculos", ativo: true },
-  { id: "macaxeira", nome: "Macaxeira",       categoriaId: "tuberculos", ativo: true },
-  { id: "limao",     nome: "Limão",           categoriaId: "frutas",     ativo: true },
-  { id: "laranja",   nome: "Laranja",         categoriaId: "frutas",     ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1582979512210-99b6a53386f9?w=600&h=400&fit=crop" },
-  { id: "manga",     nome: "Manga",           categoriaId: "frutas",     ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1601493700631-2b16ec4b4716?w=600&h=400&fit=crop" },
-  { id: "mamao",     nome: "Mamão",           categoriaId: "frutas",     ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1526318472351-c75fcf070305?w=600&h=400&fit=crop" },
-  { id: "banana",    nome: "Banana",          categoriaId: "frutas",     ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600&h=400&fit=crop" },
-  { id: "melancia",  nome: "Melancia",        categoriaId: "frutas",     ativo: true },
-  { id: "abacaxi",   nome: "Abacaxi",         categoriaId: "frutas",     ativo: true,  imagemUrl: "https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=600&h=400&fit=crop" },
-  { id: "goiaba",    nome: "Goiaba",          categoriaId: "frutas",     ativo: true },
-  { id: "acerola",   nome: "Acerola",         categoriaId: "frutas",     ativo: true },
-  { id: "caju",      nome: "Caju",            categoriaId: "frutas",     ativo: true },
-];
-
-const INIT_USUARIOS: Usuario[] = [
-  { id: "u1", nome: "Restaurante Tempero da Roça", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "12.345.678/0001-91", email: "tempero@exemplo.com.br", senha: "123456", endereco: "Rua Nova, Barraca 23-A, Setor C", whatsapp: "(75) 99100-0001", responsavel: "Maria das Graças", alimentosInteresse: ["tomate","cebola","coentro","pimentao"], horario: "06:00 às 14:00", status: "aprovado", criadoEm: "2026-08-01T08:00:00", ultimaAtividade: "2026-08-15T07:30:00" },
-  { id: "u2", nome: "Distribuidora São Cristóvão", tipo: "comerciante", cnpjCpf: "00.000.002/0001-02", email: "sao.cristovao@exemplo.com.br", senha: "123456", endereco: "Baraúnas, Galpão 3, Lote 45", whatsapp: "(75) 99100-0002", responsavel: "João Batista Oliveira", alimentosInteresse: ["mamao","banana","manga","abacaxi"], horario: "05:00 às 13:00", status: "aprovado", criadoEm: "2026-07-28T06:00:00", ultimaAtividade: "2026-08-15T06:45:00" },
-  { id: "u3", nome: "Restaurante Sabor Nordestino", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "23.456.789/0001-13", email: "sabornordestino@exemplo.com.br", endereco: "Queimadinha, Loja 7, Setor B", whatsapp: "(75) 99100-0003", responsavel: "Ana Cláudia Costa", alimentosInteresse: ["banana","mamao","cenoura","beterraba"], horario: "06:30 às 15:00", status: "aprovado", criadoEm: "2026-08-05T07:30:00" },
-  { id: "u4", nome: "Mercado Progresso", tipo: "comerciante", cnpjCpf: "00.000.004/0001-24", email: "mercado.progresso@exemplo.com.br", endereco: "Rua Nova, Barraca 14, Setor A", whatsapp: "(75) 99100-0004", responsavel: "Pedro Alves Lima", alimentosInteresse: ["tomate","quiabo","maxixe","jilo"], horario: "04:00 às 12:00", status: "aprovado", criadoEm: "2026-07-20T05:00:00" },
-  { id: "u5", nome: "Lanchonete Boa Vista", tipo: "restaurante", documentoTipo: "cnpj", cnpjCpf: "34.567.890/0001-55", email: "boavista@exemplo.com.br", endereco: "Baraúnas, Loja 2, Corredor Norte", whatsapp: "(75) 99100-0005", responsavel: "Carla Ferreira", alimentosInteresse: ["alface","tomate","cebolinha"], horario: "07:00 às 18:00", status: "pendente", criadoEm: "2026-08-14T09:00:00" },
-  { id: "u6", nome: "Hortifrúti Raízes do Sertão", tipo: "comerciante", cnpjCpf: "00.000.006/0001-46", email: "raizesdosertao@exemplo.com.br", endereco: "Queimadinha, Galpão 1, Dock 8", whatsapp: "(75) 99100-0006", responsavel: "Raimundo Nonato", alimentosInteresse: ["manga","goiaba","caju"], horario: "04:30 às 12:30", status: "pendente", criadoEm: "2026-08-15T07:00:00" },
-  { id: "admin", nome: "Administração Central", tipo: "admin", cnpjCpf: "00.000.000/0001-00", email: "admin@centrotroca.feira.ba", senha: "admin123", endereco: "Centro de Abastecimento, Administração", whatsapp: "(75) 99100-0000", responsavel: "Gestão do Sistema", alimentosInteresse: [], horario: "24h", status: "aprovado", criadoEm: "2026-01-01T00:00:00" },
-];
-
-const INIT_LISTAGENS: Listagem[] = [
-  { id: "l1", tipo: "oferta",  usuarioId: "u2", alimento: "mamao",   quantidadeG: 3000, maturacao: "muito-maduro", prazo: "2026-08-18", observacao: "Caixas bem maduras, bom para consumo imediato.", fotoUrl: "https://images.unsplash.com/photo-1526318472351-c75fcf070305?w=600&h=400&fit=crop", status: "ativa",        criadoEm: "2026-08-15T06:00:00" },
-  { id: "l2", tipo: "oferta",  usuarioId: "u4", alimento: "tomate",  quantidadeG: 2000, maturacao: "maduro",       prazo: "2026-08-19", observacao: null, fotoUrl: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600&h=400&fit=crop", status: "ativa",        criadoEm: "2026-08-15T06:30:00" },
-  { id: "l3", tipo: "pedido",  usuarioId: "u1", alimento: "banana",  quantidadeG: 1500, maturacao: "maduro",       prazo: "2026-08-20", observacao: "Preciso para amanhã de manhã.",  fotoUrl: null, status: "ativa",        criadoEm: "2026-08-15T07:00:00" },
-  { id: "l4", tipo: "oferta",  usuarioId: "u2", alimento: "banana",  quantidadeG: 2000, maturacao: "verde",        prazo: "2026-08-22", observacao: "Boa para uso com prazo.",          fotoUrl: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600&h=400&fit=crop", status: "em-negociacao",criadoEm: "2026-08-14T08:00:00" },
-  { id: "l5", tipo: "pedido",  usuarioId: "u3", alimento: "cenoura", quantidadeG: 1000, maturacao: "maduro",       prazo: "2026-08-21", observacao: null, fotoUrl: null, status: "ativa",        criadoEm: "2026-08-15T08:30:00" },
-  { id: "l6", tipo: "oferta",  usuarioId: "u4", alimento: "quiabo",  quantidadeG: 700,  maturacao: "meio-maduro",  prazo: "2026-08-19", observacao: null, fotoUrl: "https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&h=400&fit=crop", status: "ativa",        criadoEm: "2026-08-15T09:00:00" },
-  { id: "l7", tipo: "pedido",  usuarioId: "u4", alimento: "manga",   quantidadeG: 2500, maturacao: "meio-maduro",  prazo: "2026-08-22", observacao: null, fotoUrl: null, status: "ativa",        criadoEm: "2026-08-15T10:00:00" },
-  { id: "l8", tipo: "oferta",  usuarioId: "u3", alimento: "cebola",  quantidadeG: 1500, maturacao: "maduro",       prazo: "2026-08-20", observacao: "Colhidas há dois dias.", fotoUrl: null, status: "concluida",     criadoEm: "2026-08-13T07:00:00" },
-  { id: "l9", tipo: "oferta",  usuarioId: "u2", alimento: "abacaxi", quantidadeG: 1000, maturacao: "maduro",       prazo: "2026-08-20", observacao: null, fotoUrl: "https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=600&h=400&fit=crop", status: "em-negociacao",criadoEm: "2026-08-12T08:00:00" },
-];
-
-const INIT_PROPOSTAS: Proposta[] = [
-  { id: "p1", listagemId: "l4", propostaPaiId: null, versao: 1, status: "contraproposto", criadoEm: "2026-08-14T10:00:00", proponenteId: "u1", oferecem: { alimento: "tomate", quantidadeG: 2000, maturacao: "maduro", observacao: "Tomates de ontem." }, querem: { alimento: "banana", quantidadeG: 2000, maturacao: "verde", observacao: null }, confirmacoes: [] },
-  { id: "p2", listagemId: "l4", propostaPaiId: "p1", versao: 2, status: "proposto",       criadoEm: "2026-08-14T11:30:00", proponenteId: "u2", oferecem: { alimento: "banana",  quantidadeG: 1500, maturacao: "verde",  observacao: "Só tenho 1,5 kg disponível." }, querem: { alimento: "tomate",  quantidadeG: 1500, maturacao: "maduro", observacao: null }, confirmacoes: [] },
-  { id: "p3", listagemId: "l9", propostaPaiId: null, versao: 1, status: "encontro-agendado", criadoEm: "2026-08-13T10:00:00", proponenteId: "u1", oferecem: { alimento: "cebola",  quantidadeG: 1000, maturacao: "maduro", observacao: null }, querem: { alimento: "abacaxi", quantidadeG: 1000, maturacao: "maduro", observacao: null }, confirmacoes: [{ usuarioId: "u2", resposta: "aconteceu", pesoG: 980, criadaEm: "2026-08-15T07:00:00" }] },
-];
-
-// e1 meeting was 2026-08-14 (yesterday) → TODAY > e.data → true → confirmation pending for u1
-const INIT_ENCONTROS: Encontro[] = [
-  { id: "e1", propostaId: "p3", data: "2026-08-14", horario: "06:00", local: "Centro de Abastecimento, Rua Nova, Setor C", criadoEm: "2026-08-13T20:00:00", alteracoes: [] },
-];
-
-const INIT_MENSAGENS: Mensagem[] = [
-  { id: "m1", rootPropostaId: "p3", autorId: "sistema", tipo: "sistema", texto: "Restaurante Tempero da Roça enviou uma proposta para a oferta de Abacaxi.", criadaEm: "2026-08-13T10:00:00", lida: true },
-  { id: "m2", rootPropostaId: "p3", autorId: "u1", tipo: "texto", texto: "Bom dia! Tenho cebola madura disponível, posso trocar 1 kg.", criadaEm: "2026-08-13T10:05:00", lida: true },
-  { id: "m3", rootPropostaId: "p3", autorId: "u2", tipo: "texto", texto: "Combinado! Me serve. Pode ser amanhã cedo aqui no Setor C?", criadaEm: "2026-08-13T10:30:00", lida: true },
-  { id: "m4", rootPropostaId: "p3", autorId: "u1", tipo: "texto", texto: "Pode ser às 06:00?", criadaEm: "2026-08-13T10:32:00", lida: true },
-  { id: "m5", rootPropostaId: "p3", autorId: "u2", tipo: "texto", texto: "Perfeito.", criadaEm: "2026-08-13T10:35:00", lida: true },
-  { id: "m6", rootPropostaId: "p3", autorId: "sistema", tipo: "sistema", texto: "Proposta aceita. Encontro agendado: 14/08 às 06:00 — Centro de Abastecimento, Rua Nova, Setor C.", criadaEm: "2026-08-13T20:00:00", lida: true },
-  { id: "m7", rootPropostaId: "p1", autorId: "sistema", tipo: "sistema", texto: "Restaurante Tempero da Roça enviou uma proposta para a oferta de Banana.", criadaEm: "2026-08-14T10:00:00", lida: true },
-  { id: "m8", rootPropostaId: "p1", autorId: "u1", tipo: "texto", texto: "Tenho tomate maduro pra trocar pelos seus 2 kg de banana.", criadaEm: "2026-08-14T10:05:00", lida: true },
-  { id: "m9", rootPropostaId: "p1", autorId: "u2", tipo: "texto", texto: "Não tenho os 2 kg, só consigo 1,5 kg. Aceita?", criadaEm: "2026-08-14T11:25:00", lida: true },
-  { id: "m10",rootPropostaId: "p1", autorId: "sistema", tipo: "sistema", texto: "Distribuidora São Cristóvão enviou uma contraproposta.", criadaEm: "2026-08-14T11:30:00", lida: false },
-];
-
-const INIT_NOTIFICACOES: Notificacao[] = [
-  { id: "n1", usuarioId: "u1", mensagem: "João Batista (Distribuidora São Cristóvão) enviou uma contraproposta para Banana. Banana verde • 1,5 kg.", lida: false, criadaEm: "2026-08-14T11:35:00", listagemId: "l4", propostaId: "p2" },
-  { id: "n2", usuarioId: "u1", mensagem: "Pedro Alves (Mercado Progresso) publicou uma nova oferta de Tomate. 2 kg, maduro.", lida: false, criadaEm: "2026-08-15T06:35:00", listagemId: "l2" },
-  { id: "n3", usuarioId: "u2", mensagem: "Maria das Graças (Restaurante Tempero da Roça) propôs troca pela sua oferta de Banana.", lida: true, criadaEm: "2026-08-14T10:05:00", listagemId: "l4", propostaId: "p1" },
-];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -501,9 +412,11 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
   notifCount: number; onNotif: ()=>void; onLogout: ()=>void;
   adminTab: AdminTab; setAdminTab: (t: AdminTab)=>void;
 }) {
-  if (user.id === "admin") {
+  if (isAdminUser(user)) {
     const items: Array<{ tab: AdminTab; label: string; icon: React.ElementType }> = [
       { tab: "visao-geral",  label: "Visão Geral",  icon: Activity },
+      { tab: "confirmacoes", label: "Confirmações", icon: ClipboardList },
+      { tab: "encontros",    label: "Encontros",    icon: CalendarCheck },
       { tab: "usuarios",     label: "Usuários",     icon: Users },
       { tab: "publicacoes",  label: "Publicações",  icon: Package },
       { tab: "trocas",       label: "Trocas",       icon: RefreshCw },
@@ -668,30 +581,34 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 
-function LoginView({ usuarios, onLogin, onRegistro, onBack }: { usuarios: Usuario[]; onLogin: (u: Usuario)=>void; onRegistro: ()=>void; onBack: ()=>void }) {
+function LoginView({ onLogin, onRegistro, onBack }: { onLogin: (email: string, senha: string)=>Promise<string|null>; onRegistro: ()=>void; onBack: ()=>void }) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
-  function submit(e: React.FormEvent) {
+  const [enviando, setEnviando] = useState(false);
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const usuario = usuarios.find(u => u.status === "aprovado" && u.email.toLowerCase() === email.trim().toLowerCase() && u.senha === senha);
-    if (!usuario) { setErro("E-mail ou senha inválidos."); return; }
-    onLogin(usuario);
+    setEnviando(true);
+    const msg = await onLogin(email, senha);
+    setEnviando(false);
+    if (msg) setErro(msg);
   }
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="bg-primary text-primary-foreground px-5 pt-12 pb-8">
-        <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
-        <div className="flex items-center gap-2 mb-1"><ShoppingBasket className="w-4 h-4 text-[#E8A33D]"/><p className="text-xs font-semibold text-primary-foreground/60 uppercase tracking-widest">Feira Circular</p></div>
-        <div className="flex items-center gap-2"><ShoppingBasket className="w-5 h-5 text-[#E8A33D]"/><h1 className="text-2xl font-black text-primary-foreground">Entrar na plataforma</h1></div>
-        <p className="text-xs text-primary-foreground/40 mt-1">Use o e-mail e a senha do estabelecimento.</p>
+      <div className="bg-primary text-primary-foreground pt-12 pb-8">
+        <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5 px-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
+        <div className="max-w-md mx-auto w-full px-5 md:text-center">
+          <div className="flex items-center gap-2.5 mb-2 md:justify-center"><ShoppingBasket className="w-6 h-6 text-[#E8A33D]"/><p className="text-lg font-black text-primary-foreground tracking-wide">Feira Circular</p></div>
+          <h1 className="text-3xl md:text-4xl font-black text-primary-foreground">Entrar na plataforma</h1>
+          <p className="text-xs text-primary-foreground/40 mt-1">Use o e-mail e a senha do estabelecimento.</p>
+        </div>
       </div>
       <div className="flex-1 px-5 py-4 max-w-md mx-auto w-full">
         <form onSubmit={submit} className="space-y-4">
           <Inp label="E-mail" type="email" value={email} autoComplete="email" onChange={e=>{setEmail(e.target.value);setErro("")}} placeholder="contato@estabelecimento.com" />
           <Inp label="Senha" type="password" value={senha} autoComplete="current-password" onChange={e=>{setSenha(e.target.value);setErro("")}} placeholder="Sua senha" />
           {erro && <p className="text-sm text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-4 h-4"/>{erro}</p>}
-          <Btn type="submit" className="w-full">Entrar</Btn>
+          <Btn type="submit" className="w-full" disabled={enviando}>{enviando?"Entrando...":"Entrar"}</Btn>
         </form>
         <div className="pt-6 text-center">
           <p className="text-sm text-muted-foreground">Não tem cadastro? <button onClick={onRegistro} className="text-primary font-semibold hover:underline">Solicitar acesso</button></p>
@@ -1514,7 +1431,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Eu ofereço</p>
                 {pForm.modo!=="equivalente"&&<Sel value={pForm.alimento} error={pErrors.alimento} onChange={e=>{setPForm(f=>({...f,alimento:e.target.value}));setPErrors(er=>{const n={...er};delete n.alimento;return n;});}}>
                   <option value="">Selecione o alimento</option>
-                  {cats.map(catId=>{ const cat=INIT_CATEGORIAS.find(c=>c.id===catId); return <optgroup key={catId} label={cat?.nome??catId}>{alimentosAtivos.filter(a=>a.categoriaId===catId).map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}</optgroup>; })}
+                  {cats.map(catId=><optgroup key={catId} label={catId}>{alimentosAtivos.filter(a=>a.categoriaId===catId).map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}</optgroup>)}
                 </Sel>}
                 {pForm.modo!=="equivalente"&&<div className="flex gap-2">
                   <input type="number" min="0" step="any" placeholder="Quantidade" value={pForm.quantidade} onChange={e=>{setPForm(f=>({...f,quantidade:e.target.value}));setPErrors(er=>{const n={...er};delete n.quantidade;return n;});}} className={`flex-1 px-3 py-3 rounded-lg border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition ${pErrors.quantidade?"border-[#E85D4E]":"border-border"}`}/>
@@ -1678,19 +1595,14 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const [novaCategoria, setNovaCategoria] = useState("");
   const [editingCategoria, setEditingCategoria] = useState<string|null>(null);
   const [catEditNome, setCatEditNome] = useState("");
-  const [paginaConfirmacoes, setPaginaConfirmacoes] = useState(0);
 
   const pendentes=usuarios.filter(u=>u.status==="pendente");
-  const aprovados=usuarios.filter(u=>u.status==="aprovado"&&u.id!=="admin");
+  const aprovados=usuarios.filter(u=>u.status==="aprovado"&&!isAdminUser(u));
   const bloqueados=usuarios.filter(u=>u.status==="bloqueado");
   const rejeitados=usuarios.filter(u=>u.status==="rejeitado");
   const divergencias=propostas.filter(p=>p.status==="divergencia");
   const confirmacoesPendentes=propostas.filter(p=>isConfirmacaoPendente(p,encontros)&&p.confirmacoes.length<2);
   const encontrosAgendados=encontros.filter(e=>{ const p=propostas.find(x=>x.id===e.propostaId); return p?.status==="encontro-agendado"; });
-  const confirmacoesPorPagina = 3;
-  const totalPaginasConfirmacoes = Math.max(1, Math.ceil(confirmacoesPendentes.length / confirmacoesPorPagina));
-  const paginaAtualConfirmacoes = Math.min(paginaConfirmacoes, totalPaginasConfirmacoes - 1);
-  const confirmacoesVisiveis = confirmacoesPendentes.slice(paginaAtualConfirmacoes * confirmacoesPorPagina, (paginaAtualConfirmacoes + 1) * confirmacoesPorPagina);
 
   function execModal() {
     if(!modal)return;
@@ -1703,6 +1615,8 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
 
   const TABS: Array<{key:AdminTab;label:string}> = [
     {key:"visao-geral",label:"Visão Geral"},
+    {key:"confirmacoes",label:`Confirmações${confirmacoesPendentes.length>0?` (${confirmacoesPendentes.length})`:""}`},
+    {key:"encontros",label:`Encontros${encontrosAgendados.length>0?` (${encontrosAgendados.length})`:""}`},
     {key:"usuarios",label:`Usuários${pendentes.length>0?` (${pendentes.length})`:""}`},
     {key:"publicacoes",label:"Publicações"},
     {key:"trocas",label:"Trocas"},
@@ -1720,38 +1634,15 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
       <div className="px-4 py-5">
         {tab==="visao-geral" && (
           <div className="space-y-6">
-            {(pendentes.length>0||confirmacoesPendentes.length>0)&&(
-              <div className="space-y-3">
-                {pendentes.length>0&&(
-                  <div className="bg-[#E8A33D]/10 border border-[#E8A33D]/30 rounded-xl p-4">
-                    <p className="text-xs font-bold text-[#B87A00] uppercase tracking-widest mb-3">Cadastros aguardando aprovação</p>
-                    {pendentes.map(u=>(
-                      <div key={u.id} className="flex items-center justify-between gap-3 py-2 border-b border-[#E8A33D]/20 last:border-0">
-                        <div><p className="text-sm font-semibold text-foreground">{u.nome}</p><p className="text-xs text-muted-foreground">{u.responsavel} · {u.tipo} · {fmtDate(u.criadoEm)}</p></div>
-                        <div className="flex gap-2"><Btn size="sm" onClick={()=>onApprove(u.id)}><Check className="w-3 h-3"/>Aprovar</Btn><Btn size="sm" variant="danger" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3 h-3"/></Btn></div>
-                      </div>
-                    ))}
+            {pendentes.length>0&&(
+              <div className="bg-[#E8A33D]/10 border border-[#E8A33D]/30 rounded-xl p-4">
+                <p className="text-xs font-bold text-[#B87A00] uppercase tracking-widest mb-3">Cadastros aguardando aprovação</p>
+                {pendentes.map(u=>(
+                  <div key={u.id} className="flex items-center justify-between gap-3 py-2 border-b border-[#E8A33D]/20 last:border-0">
+                    <div><p className="text-sm font-semibold text-foreground">{u.nome}</p><p className="text-xs text-muted-foreground">{u.responsavel} · {u.tipo} · {fmtDate(u.criadoEm)}</p></div>
+                    <div className="flex gap-2"><Btn size="sm" onClick={()=>onApprove(u.id)}><Check className="w-3 h-3"/>Aprovar</Btn><Btn size="sm" variant="danger" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3 h-3"/></Btn></div>
                   </div>
-                )}
-                {confirmacoesPendentes.length>0&&(
-                  <div className="bg-[#E85D4E]/10 border border-[#E85D4E]/30 rounded-xl p-4">
-                    <div className="flex items-center justify-between gap-3 mb-2"><p className="text-xs font-bold text-[#E85D4E] uppercase tracking-widest">Confirmações pendentes</p>{totalPaginasConfirmacoes>1&&<span className="text-[11px] font-semibold text-[#E85D4E]">Página {paginaAtualConfirmacoes+1} de {totalPaginasConfirmacoes}</span>}</div>
-                    {confirmacoesVisiveis.map(p=>{ const l=listagens.find(x=>x.id===p.listagemId); const e=encontros.find(x=>x.propostaId===p.id); const prop=usuarios.find(u=>u.id===p.proponenteId); const dono=usuarios.find(u=>u.id===l?.usuarioId); const propConf=p.confirmacoes.find(c=>c.usuarioId===p.proponenteId); const donoConf=p.confirmacoes.find(c=>c.usuarioId===l?.usuarioId); return (
-                      <div key={p.id} className="py-3 border-b border-[#E85D4E]/20 last:border-0 min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{prop?.nome} com {dono?.nome}</p>
-                        {e&&<p className="text-xs text-muted-foreground">{fmtDateShort(e.data)} às {e.horario}</p>}
-                        <div className="flex gap-3 mt-1.5">
-                          {[{u:prop,c:propConf},{u:dono,c:donoConf}].map((item,i)=>(
-                            <span key={i} className={`text-xs px-2 py-0.5 rounded-full ${item.c?(item.c.resposta==="aconteceu"?"bg-green-50 text-green-700":"bg-red-50 text-[#E85D4E]"):"bg-muted text-muted-foreground"}`}>
-                              {item.u?.responsavel.split(" ")[0]}: {item.c?(item.c.resposta==="aconteceu"?"Aconteceu":"Não aconteceu"):"Pendente"}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ); })}
-                    {totalPaginasConfirmacoes>1&&<div className="flex items-center justify-between pt-3"><button type="button" disabled={paginaAtualConfirmacoes===0} onClick={()=>setPaginaConfirmacoes(paginaAtualConfirmacoes-1)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#E85D4E] disabled:opacity-40"><ChevronLeft className="w-4 h-4"/>Anterior</button><button type="button" disabled={paginaAtualConfirmacoes===totalPaginasConfirmacoes-1} onClick={()=>setPaginaConfirmacoes(paginaAtualConfirmacoes+1)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#E85D4E] disabled:opacity-40">Próxima<ChevronRight className="w-4 h-4"/></button></div>}
-                  </div>
-                )}
+                ))}
               </div>
             )}
             <div>
@@ -1760,17 +1651,17 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
                 {[
                   {label:"Ofertas ativas",val:listagens.filter(l=>l.tipo==="oferta"&&l.status==="ativa").length,cor:"#2F6B5E"},
                   {label:"Pedidos ativos",val:listagens.filter(l=>l.tipo==="pedido"&&l.status==="ativa").length,cor:"#B87A00"},
-                  {label:"Encontros agendados",val:encontrosAgendados.length,cor:"#ca8a04"},
-                  {label:"Confirmações pendentes",val:confirmacoesPendentes.length,cor:"#E85D4E"},
-                  {label:"Ocorrências abertas",val:ocorrencias.filter(o=>o.status==="aberta").length,cor:"#E85D4E"},
-                  {label:"Trocas concluídas",val:propostas.filter(p=>p.status==="concluido").length,cor:"#22c55e"},
-                  {label:"Usuários aprovados",val:aprovados.length,cor:"#2F6B5E"},
-                  {label:"Pendentes aprovação",val:pendentes.length,cor:"#ca8a04"},
+                  {label:"Encontros agendados",val:encontrosAgendados.length,cor:"#ca8a04",tab:"encontros" as AdminTab},
+                  {label:"Confirmações pendentes",val:confirmacoesPendentes.length,cor:"#E85D4E",tab:"confirmacoes" as AdminTab},
+                  {label:"Ocorrências abertas",val:ocorrencias.filter(o=>o.status==="aberta").length,cor:"#E85D4E",tab:"ocorrencias" as AdminTab},
+                  {label:"Trocas concluídas",val:propostas.filter(p=>p.status==="concluido").length,cor:"#22c55e",tab:"trocas" as AdminTab},
+                  {label:"Usuários aprovados",val:aprovados.length,cor:"#2F6B5E",tab:"usuarios" as AdminTab},
+                  {label:"Pendentes aprovação",val:pendentes.length,cor:"#ca8a04",tab:"usuarios" as AdminTab},
                 ].map(item=>(
-                  <div key={item.label} className="bg-card border border-border rounded-lg p-3">
+                  <button key={item.label} type="button" onClick={()=>item.tab&&setTab(item.tab)} className="bg-card border border-border rounded-lg p-3 text-left hover:border-primary/40 transition-colors">
                     <p className="text-2xl font-black" style={{color:item.cor}}>{item.val}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{item.label}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -1778,17 +1669,47 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
               <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Publicações por tipo</p><div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={[{nome:"Ofertas",total:listagens.filter(l=>l.tipo==="oferta").length},{nome:"Pedidos",total:listagens.filter(l=>l.tipo==="pedido").length}]}><XAxis dataKey="nome" tick={{fontSize:11}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Bar dataKey="total" fill="#2F6B5E" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>
               <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Status das trocas</p><div className="h-52"><ResponsiveContainer width="100%" height="100%"><BarChart layout="vertical" data={[{nome:"Em negociação",total:propostas.filter(p=>["proposto","contraproposto"].includes(p.status)).length,cor:"#E8A33D"},{nome:"Agendadas",total:propostas.filter(p=>p.status==="encontro-agendado").length,cor:"#ca8a04"},{nome:"Concluídas",total:propostas.filter(p=>p.status==="concluido").length,cor:"#2F6B5E"},{nome:"Com problema",total:propostas.filter(p=>["divergencia","nao-compareceu","cancelado"].includes(p.status)).length,cor:"#E85D4E"}]} margin={{left:8,right:12}}><XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/><YAxis type="category" dataKey="nome" width={92} tick={{fontSize:10}}/><Tooltip formatter={(value)=>[value,"Trocas"]}/><Bar dataKey="total" radius={[0,4,4,0]}>{["#E8A33D","#ca8a04","#2F6B5E","#E85D4E"].map(c=><Cell key={c} fill={c}/>)}</Bar></BarChart></ResponsiveContainer></div></div>
             </div>
-            {encontrosAgendados.length>0&&(
-              <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Encontros agendados</p>
-                <div className="divide-y divide-border">
-                  {encontrosAgendados.map(e=>{ const p=propostas.find(x=>x.id===e.propostaId); const l=p?listagens.find(x=>x.id===p.listagemId):null; const prop=p?usuarios.find(u=>u.id===p.proponenteId):null; const dono=l?usuarios.find(u=>u.id===l.usuarioId):null; const passado=isDiaEncontroPassado(e); return (
-                    <div key={e.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground break-words">{prop?.nome} com {dono?.nome}</p><p className="text-xs text-muted-foreground break-words">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p></div>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${passado?"bg-red-50 text-[#E85D4E]":"bg-amber-50 text-amber-700"}`}>{passado?"Aguard. confirmação":"Agendado"}</span>
+          </div>
+        )}
+
+        {tab==="confirmacoes" && (
+          <div>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Confirmações pendentes ({confirmacoesPendentes.length})</p>
+            {confirmacoesPendentes.length===0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma confirmação pendente no momento.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {confirmacoesPendentes.map(p=>{ const l=listagens.find(x=>x.id===p.listagemId); const e=encontros.find(x=>x.propostaId===p.id); const prop=usuarios.find(u=>u.id===p.proponenteId); const dono=usuarios.find(u=>u.id===l?.usuarioId); const propConf=p.confirmacoes.find(c=>c.usuarioId===p.proponenteId); const donoConf=p.confirmacoes.find(c=>c.usuarioId===l?.usuarioId); return (
+                  <div key={p.id} className="py-3 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{prop?.nome} com {dono?.nome}</p>
+                    {e&&<p className="text-xs text-muted-foreground">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p>}
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                      {[{u:prop,c:propConf},{u:dono,c:donoConf}].map((item,i)=>(
+                        <span key={i} className={`text-xs px-2 py-0.5 rounded-full ${item.c?(item.c.resposta==="aconteceu"?"bg-green-50 text-green-700":"bg-red-50 text-[#E85D4E]"):"bg-muted text-muted-foreground"}`}>
+                          {item.u?.responsavel.split(" ")[0]}: {item.c?(item.c.resposta==="aconteceu"?"Aconteceu":"Não aconteceu"):"Pendente"}
+                        </span>
+                      ))}
                     </div>
-                  ); })}
-                </div>
+                  </div>
+                ); })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab==="encontros" && (
+          <div>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Encontros agendados ({encontrosAgendados.length})</p>
+            {encontrosAgendados.length===0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum encontro agendado no momento.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {encontrosAgendados.map(e=>{ const p=propostas.find(x=>x.id===e.propostaId); const l=p?listagens.find(x=>x.id===p.listagemId):null; const prop=p?usuarios.find(u=>u.id===p.proponenteId):null; const dono=l?usuarios.find(u=>u.id===l.usuarioId):null; const passado=isDiaEncontroPassado(e); return (
+                  <div key={e.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground break-words">{prop?.nome} com {dono?.nome}</p><p className="text-xs text-muted-foreground break-words">{fmtDateShort(e.data)} às {e.horario} · {e.local}</p></div>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${passado?"bg-red-50 text-[#E85D4E]":"bg-amber-50 text-amber-700"}`}>{passado?"Aguard. confirmação":"Agendado"}</span>
+                  </div>
+                ); })}
               </div>
             )}
           </div>
@@ -2032,13 +1953,18 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
 
 // ─── PERFIL ───────────────────────────────────────────────────────────────────
 
-function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
+function PerfilView({ user, onLogout, onUpdatePerfil, onChangePassword, alimentosBD }: {
   user: Usuario; onLogout: ()=>void;
-  onUpdatePerfil: (u: Partial<Usuario>)=>void | Promise<void>; alimentosBD: AlimentoBD[];
+  onUpdatePerfil: (u: Partial<Usuario>)=>void | Promise<void>;
+  onChangePassword: (nova: string)=>Promise<string|null>;
+  alimentosBD: AlimentoBD[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ responsavel:user.responsavel, whatsapp:user.whatsapp, email:user.email, endereco:user.endereco, horario:user.horario });
   const [errors, setErrors] = useState<Errors>({});
+  const [senhaForm, setSenhaForm] = useState({ nova:"", confirma:"" });
+  const [senhaErro, setSenhaErro] = useState("");
+  const [senhaOk, setSenhaOk] = useState("");
   const horarioOpts=["04:00 às 10:00","04:00 às 12:00","04:00 às 14:00","05:00 às 11:00","05:00 às 13:00","06:00 às 12:00","06:00 às 14:00","06:00 às 18:00","07:00 às 15:00","07:00 às 18:00"];
   function saveEdit() {
     const e: Errors = {};
@@ -2055,7 +1981,7 @@ function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
       <div className="flex items-center gap-4 pb-5 border-b border-border">
         <label className="group relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white text-2xl font-black flex-shrink-0 bg-primary cursor-pointer ring-offset-2 focus-within:ring-2 focus-within:ring-primary" title="Alterar foto do perfil">
           <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>onUpdatePerfil({fotoUrl:String(reader.result)});reader.readAsDataURL(file);}}/>
-          {user.fotoUrl?<img src={user.fotoUrl} alt={user.nome} className="w-full h-full object-cover"/>:user.id==="admin"?<Shield className="w-6 h-6"/>:user.nome.charAt(0)}
+          {user.fotoUrl?<img src={user.fotoUrl} alt={user.nome} className="w-full h-full object-cover"/>:isAdminUser(user)?<Shield className="w-6 h-6"/>:user.nome.charAt(0)}
           <span className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"><Camera className="w-5 h-5"/><span className="sr-only">Alterar foto</span></span>
         </label>
         <div className="flex-1 min-w-0"><p className="font-extrabold text-foreground text-lg leading-tight truncate">{user.nome}</p><p className="text-sm text-muted-foreground capitalize">{user.tipo}</p><span className="text-xs font-semibold text-[#2F6B5E] bg-teal-50 px-2 py-0.5 rounded-full inline-block mt-1">Aprovado</span></div>
@@ -2086,6 +2012,22 @@ function PerfilView({ user, onLogout, onUpdatePerfil, alimentosBD }: {
           <div className="flex flex-wrap gap-2">{user.alimentosInteresse.map(a=><span key={a} className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">{nomeAlimento(a,alimentosBD)}</span>)}</div>
         </div>
       )}
+      {!isEditing&&(
+        <div className="py-4 border-t border-border space-y-3">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Alterar senha</p>
+          <Inp label="Nova senha" type="password" value={senhaForm.nova} onChange={e=>{setSenhaForm(f=>({...f,nova:e.target.value}));setSenhaErro("");setSenhaOk("");}} placeholder="Mínimo 6 caracteres"/>
+          <Inp label="Confirmar nova senha" type="password" value={senhaForm.confirma} onChange={e=>{setSenhaForm(f=>({...f,confirma:e.target.value}));setSenhaErro("");setSenhaOk("");}}/>
+          {senhaErro&&<p className="text-xs text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{senhaErro}</p>}
+          {senhaOk&&<p className="text-xs text-[#2F6B5E]">{senhaOk}</p>}
+          <Btn size="sm" onClick={async()=>{
+            if(senhaForm.nova.length<6){setSenhaErro("A senha deve ter ao menos 6 caracteres.");return;}
+            if(senhaForm.nova!==senhaForm.confirma){setSenhaErro("As senhas não conferem.");return;}
+            const msg=await onChangePassword(senhaForm.nova);
+            if(msg){setSenhaErro(msg);return;}
+            setSenhaForm({nova:"",confirma:""}); setSenhaOk("Senha atualizada.");
+          }}>Salvar nova senha</Btn>
+        </div>
+      )}
       {!isEditing&&<div className="pt-4 border-t border-border"><button onClick={onLogout} className="text-sm text-[#E85D4E] font-semibold">Sair da conta</button></div>}
     </div>
   );
@@ -2103,15 +2045,51 @@ export default function App() {
   const [adminTab, setAdminTab]   = useState<AdminTab>("visao-geral");
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
-  const [usuarios,    setUsuarios]    = useState<Usuario[]>(INIT_USUARIOS);
-  const [listagens,   setListagens]   = useState<Listagem[]>(INIT_LISTAGENS);
-  const [propostas,   setPropostas]   = useState<Proposta[]>(INIT_PROPOSTAS);
-  const [encontros,   setEncontros]   = useState<Encontro[]>(INIT_ENCONTROS);
-  const [mensagens,   setMensagens]   = useState<Mensagem[]>(INIT_MENSAGENS);
-  const [notificacoes,setNotificacoes]= useState<Notificacao[]>(INIT_NOTIFICACOES);
+  const [usuarios,    setUsuarios]    = useState<Usuario[]>([]);
+  const [listagens,   setListagens]   = useState<Listagem[]>([]);
+  const [propostas,   setPropostas]   = useState<Proposta[]>([]);
+  const [encontros,   setEncontros]   = useState<Encontro[]>([]);
+  const [mensagens,   setMensagens]   = useState<Mensagem[]>([]);
+  const [notificacoes,setNotificacoes]= useState<Notificacao[]>([]);
   const [ocorrencias, setOcorrencias] = useState<OcorrenciaPos[]>([]);
-  const [categorias,  setCategorias]  = useState<CategoriaAlimento[]>(INIT_CATEGORIAS);
-  const [alimentosBD, setAlimentosBD] = useState<AlimentoBD[]>(INIT_ALIMENTOS_BD);
+  const [categorias,  setCategorias]  = useState<CategoriaAlimento[]>([]);
+  const [alimentosBD, setAlimentosBD] = useState<AlimentoBD[]>([]);
+
+  function applyPlatform(s: PlatformState) {
+    setUsuarios(s.usuarios);
+    setListagens(s.listagens);
+    setPropostas(s.propostas);
+    setEncontros(s.encontros);
+    setMensagens(s.mensagens);
+    setNotificacoes(s.notificacoes);
+    setOcorrencias(s.ocorrencias);
+    setCategorias(s.categorias);
+    setAlimentosBD(s.alimentosBD);
+  }
+
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      const catalog = await fetchCatalog();
+      if (!ativo) return;
+      setCategorias(catalog.categorias);
+      setAlimentosBD(catalog.alimentosBD);
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
+      const state = await fetchPlatformState();
+      if (!ativo) return;
+      applyPlatform(state);
+      const profile = state.usuarios.find(u => u.id === data.session!.user.id) ?? await fetchProfileById(data.session.user.id);
+      if (!profile || profile.status !== "aprovado") {
+        await supabase.auth.signOut();
+        return;
+      }
+      setUser(profile);
+      setView(isAdminUser(profile) ? "admin" : "dashboard");
+    })();
+    return () => { ativo = false; };
+  }, []);
 
   function showToast(msg: string) { setToast(msg); setTimeout(()=>setToast(""),3500); }
 
@@ -2123,8 +2101,32 @@ export default function App() {
   const pendingConfirmationId = user ? getPendingConfirmation(user.id,propostas,listagens,encontros) : null;
   const isNested = (["detalhes","nova-listagem","chat"] as View[]).includes(view);
 
-  function handleLogin(u: Usuario) { setUser(u); setView(u.id==="admin"?"admin":"dashboard"); }
-  function handleLogout() { setUser(null); setView("landing"); }
+  async function handleLogin(email: string, senha: string): Promise<string|null> {
+    if (!supabase) return "Configure o Supabase no arquivo .env.";
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
+    if (error || !data.user) {
+      const texto = error?.message?.toLowerCase() ?? "";
+      if (texto.includes("invalid login") || texto.includes("invalid credentials")) return "E-mail ou senha inválidos.";
+      return traduzirErroAuth(error?.message);
+    }
+    const state = await fetchPlatformState();
+    applyPlatform(state);
+    const profile = state.usuarios.find(u => u.id === data.user.id) ?? await fetchProfileById(data.user.id);
+    if (!profile) { await supabase.auth.signOut(); return "Perfil não encontrado."; }
+    if (profile.status !== "aprovado") {
+      await supabase.auth.signOut();
+      if (profile.status === "pendente") return "Cadastro aguardando aprovação do administrador.";
+      if (profile.status === "bloqueado") return "Esta conta está bloqueada.";
+      return "Este cadastro não está ativo.";
+    }
+    setUser(profile);
+    setView(isAdminUser(profile) ? "admin" : "dashboard");
+    return null;
+  }
+  async function handleLogout() {
+    if (supabase) await supabase.auth.signOut();
+    setUser(null); setView("landing");
+  }
   function traduzirErroAuth(message?: string): string {
     const texto = message?.toLowerCase() ?? "";
     if (texto.includes("user already registered") || texto.includes("already been registered")) return "Este e-mail já está cadastrado.";
@@ -2160,8 +2162,7 @@ export default function App() {
       showToast(traduzirErroAuth(error?.message));
       return;
     }
-    const novo: Usuario = { id:genId(), nome:data.nome!, tipo:data.tipo!, documentoTipo:data.documentoTipo as TipoDocumento, cnpjCpf:data.cnpjCpf!, email:data.email??"", senha:data.senha, endereco:data.endereco!, whatsapp:data.whatsapp!, responsavel:data.responsavel!, alimentosInteresse:data.alimentosInteresse??[], horario:data.horario!, status:"pendente", criadoEm:new Date().toISOString() };
-    setUsuarios(p=>[...p,novo]); setView("landing"); showToast("Cadastro realizado. Aguarde a aprovação do administrador.");
+    setView("landing"); showToast("Cadastro realizado. Aguarde a aprovação do administrador.");
   }
 
   function handleAddListagem(data: Partial<Listagem>) {
@@ -2240,10 +2241,22 @@ export default function App() {
   function markRead(id: string) { setNotificacoes(p=>p.map(n=>n.id===id?{...n,lida:true}:n)); }
   function markAllRead() { if(!user)return; setNotificacoes(p=>p.map(n=>n.usuarioId===user.id?{...n,lida:true}:n)); }
 
-  function handleApprove(id: string) { setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoRejeicao:undefined,motivoBloqueio:undefined}:u)); showToast("Cadastro aprovado."); }
-  function handleRejectWithReason(id: string, motivo: string) { setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"rejeitado",motivoRejeicao:motivo}:u)); showToast("Cadastro recusado."); }
-  function handleBlock(id: string, motivo: string) { setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:motivo}:u)); showToast("Usuário bloqueado."); }
-  function handleUnblock(id: string) { setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoBloqueio:undefined}:u)); showToast("Usuário desbloqueado."); }
+  function handleApprove(id: string) {
+    if (supabase) void supabase.from("profiles").update({ status: "aprovado", rejection_reason: null, block_reason: null }).eq("id", id);
+    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoRejeicao:undefined,motivoBloqueio:undefined}:u)); showToast("Cadastro aprovado.");
+  }
+  function handleRejectWithReason(id: string, motivo: string) {
+    if (supabase) void supabase.from("profiles").update({ status: "rejeitado", rejection_reason: motivo }).eq("id", id);
+    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"rejeitado",motivoRejeicao:motivo}:u)); showToast("Cadastro recusado.");
+  }
+  function handleBlock(id: string, motivo: string) {
+    if (supabase) void supabase.from("profiles").update({ status: "bloqueado", block_reason: motivo }).eq("id", id);
+    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:motivo}:u)); showToast("Usuário bloqueado.");
+  }
+  function handleUnblock(id: string) {
+    if (supabase) void supabase.from("profiles").update({ status: "aprovado", block_reason: null }).eq("id", id);
+    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoBloqueio:undefined}:u)); showToast("Usuário desbloqueado.");
+  }
   function handleDeleteUser(id: string) { setUsuarios(p=>p.filter(u=>u.id!==id)); showToast("Usuário removido."); }
   function handleRemoveListing(id: string) { setListagens(p=>p.map(l=>l.id===id?{...l,status:"cancelada"}:l)); showToast("Publicação encerrada."); }
 
@@ -2255,11 +2268,26 @@ export default function App() {
   function handleToggleCategoria(id: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,ativa:!c.ativa}:c)); }
   async function handleUpdatePerfil(updates: Partial<Usuario>) {
     if(!user)return;
-    if(supabase && user.id!=="admin" && updates.fotoUrl){
+    if(supabase && updates.fotoUrl){
       const { error } = await supabase.from("profiles").update({ avatar_url: updates.fotoUrl }).eq("id", user.id);
       if(error){ showToast("Não foi possível salvar a foto no Supabase."); return; }
     }
+    if(supabase && !updates.fotoUrl){
+      await supabase.from("profiles").update({
+        responsible: updates.responsavel ?? user.responsavel,
+        whatsapp: updates.whatsapp ?? user.whatsapp,
+        email: updates.email ?? user.email,
+        address: updates.endereco ?? user.endereco,
+        opening_hours: updates.horario ?? user.horario,
+      }).eq("id", user.id);
+    }
     setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast(updates.fotoUrl?"Foto do perfil salva.":"Dados atualizados.");
+  }
+  async function handleChangePassword(nova: string): Promise<string|null> {
+    if (!supabase) return "Configure o Supabase no arquivo .env.";
+    const { error } = await supabase.auth.updateUser({ password: nova });
+    if (error) return traduzirErroAuth(error.message);
+    return null;
   }
 
   const viewTitles: Partial<Record<View,string>> = { dashboard:"Feira Circular", listagens:"Listagens", "minhas-trocas":"Minhas Trocas", "nova-listagem":"Nova publicação", admin:"Administração", perfil:"Perfil", chat:"Chat" };
@@ -2270,7 +2298,7 @@ export default function App() {
       <>
         {toast&&<div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-semibold max-w-xs"><CheckCircle2 className="w-4 h-4 flex-shrink-0"/><span className="flex-1">{toast}</span><button onClick={()=>setToast("")}><X className="w-3.5 h-3.5 opacity-60"/></button></div>}
         {view==="registro"&&<RegistroView onSubmit={handleRegistro} onBack={()=>setView("landing")} alimentosBD={alimentosBD} categorias={categorias}/>}
-        {view==="login"&&<LoginView usuarios={usuarios} onLogin={handleLogin} onRegistro={()=>setView("registro")} onBack={()=>setView("landing")}/>}
+        {view==="login"&&<LoginView onLogin={handleLogin} onRegistro={()=>setView("registro")} onBack={()=>setView("landing")}/>}
         {view!=="registro"&&view!=="login"&&<LandingView onLogin={()=>setView("login")} onRegistro={()=>setView("registro")}/>}
       </>
     );
@@ -2283,8 +2311,8 @@ export default function App() {
       case "detalhes": return selectedId ? <DetalhesView listagemId={selectedId} listagens={listagens} propostas={propostas} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} ocorrencias={ocorrencias} onBack={()=>setView(fromView)} onAddProposta={handleAddProposta} onUpdateListagem={handleUpdateListagem} onUpdateProposta={handleUpdateProposta} onRegistrarConfirmacao={handleRegistrarConfirmacao} onAgendarEncontro={handleAgendarEncontro} onEditEncontro={handleEditEncontro} onEditListagem={handleEditListagem} onEncerrarListagem={handleEncerrarListagem} onReportarProblema={handleReportarProblema} onOpenChat={handleOpenChat}/> : null;
       case "nova-listagem": return <NovaListagemView onSubmit={handleAddListagem} onBack={()=>setView("listagens")} alimentosBD={alimentosBD} categorias={categorias}/>;
       case "minhas-trocas": return <MinhasTrocasView user={user!} listagens={listagens} propostas={propostas} usuarios={usuarios} encontros={encontros} alimentosBD={alimentosBD} navTo={navTo}/>;
-      case "admin": return user!.id==="admin" ? <AdminView tab={adminTab} setTab={setAdminTab} usuarios={usuarios} listagens={listagens} propostas={propostas} encontros={encontros} ocorrencias={ocorrencias} alimentosBD={alimentosBD} categorias={categorias} onApprove={handleApprove} onRejectWithReason={handleRejectWithReason} onBlock={handleBlock} onUnblock={handleUnblock} onDeleteUser={handleDeleteUser} onRemoveListing={handleRemoveListing} onAddAlimento={handleAddAlimento} onEditAlimento={handleEditAlimento} onToggleAlimento={handleToggleAlimento} onAddCategoria={handleAddCategoria} onEditCategoria={handleEditCategoria} onToggleCategoria={handleToggleCategoria}/> : null;
-      case "perfil": return <PerfilView user={user!} onLogout={handleLogout} onUpdatePerfil={handleUpdatePerfil} alimentosBD={alimentosBD}/>;
+      case "admin": return isAdminUser(user!) ? <AdminView tab={adminTab} setTab={setAdminTab} usuarios={usuarios} listagens={listagens} propostas={propostas} encontros={encontros} ocorrencias={ocorrencias} alimentosBD={alimentosBD} categorias={categorias} onApprove={handleApprove} onRejectWithReason={handleRejectWithReason} onBlock={handleBlock} onUnblock={handleUnblock} onDeleteUser={handleDeleteUser} onRemoveListing={handleRemoveListing} onAddAlimento={handleAddAlimento} onEditAlimento={handleEditAlimento} onToggleAlimento={handleToggleAlimento} onAddCategoria={handleAddCategoria} onEditCategoria={handleEditCategoria} onToggleCategoria={handleToggleCategoria}/> : null;
+      case "perfil": return <PerfilView user={user!} onLogout={handleLogout} onUpdatePerfil={handleUpdatePerfil} onChangePassword={handleChangePassword} alimentosBD={alimentosBD}/>;
       case "chat": return chatPropostaId ? <ChatView rootPropostaId={chatPropostaId} mensagens={mensagens} propostas={propostas} listagens={listagens} usuarios={usuarios} user={user!} alimentosBD={alimentosBD} onSend={handleSendMensagem} onBack={()=>setView(fromView||"detalhes")}/> : null;
       default: return null;
     }
@@ -2317,7 +2345,7 @@ export default function App() {
       </div>
 
       {!isNested&&(
-        <BottomNav view={view} setView={setView} isAdmin={user.id==="admin"} adminTab={adminTab} setAdminTab={setAdminTab}/>
+        <BottomNav view={view} setView={setView} isAdmin={isAdminUser(user)} adminTab={adminTab} setAdminTab={setAdminTab}/>
       )}
     </>
   );

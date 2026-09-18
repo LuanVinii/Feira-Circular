@@ -328,18 +328,21 @@ function NotifPanel({ notificacoes, onClose, onMarkRead, onMarkAllRead, onNaviga
 
 // ─── TOP BAR ─────────────────────────────────────────────────────────────────
 
-function TopBar({ title, onBack, notifCount, onNotif }: { title: string; onBack?: ()=>void; notifCount: number; onNotif: ()=>void }) {
+function TopBar({ title, onBack, notifCount, onNotif, onLogout }: { title: string; onBack?: ()=>void; notifCount: number; onNotif: ()=>void; onLogout?: ()=>void }) {
   return (
-    <header className="md:hidden bg-primary text-primary-foreground h-12 flex items-center justify-between px-4 flex-shrink-0">
-      <div className="flex items-center gap-3">
-        {onBack ? <button onClick={onBack} className="active:opacity-70"><ArrowLeft className="w-5 h-5"/></button> : <ShoppingBasket className="w-4 h-4 text-[#E8A33D]"/>}
+    <header className="md:hidden bg-primary text-primary-foreground flex items-center justify-between gap-3 px-4 py-2 flex-shrink-0" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
+      <div className="flex items-center gap-3 min-w-0">
+        {onBack ? <button onClick={onBack} className="active:opacity-70 flex-shrink-0"><ArrowLeft className="w-5 h-5"/></button> : <ShoppingBasket className="w-4 h-4 text-[#E8A33D] flex-shrink-0"/>}
         <span className="font-bold text-sm truncate">{title}</span>
       </div>
-      <div className="relative">
-        <button onClick={onNotif} className="active:opacity-70 p-1">
-          <Bell className="w-5 h-5"/>
-          {notifCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#E85D4E] rounded-full text-[10px] font-bold flex items-center justify-center">{notifCount}</span>}
-        </button>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {onLogout && <button type="button" onClick={onLogout} className="text-xs font-semibold text-primary-foreground/90 active:opacity-70">Sair</button>}
+        <div className="relative">
+          <button onClick={onNotif} className="active:opacity-70 p-1">
+            <Bell className="w-5 h-5"/>
+            {notifCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#E85D4E] rounded-full text-[10px] font-bold flex items-center justify-center">{notifCount}</span>}
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -355,19 +358,21 @@ function BottomNav({ view, setView, isAdmin, adminTab, setAdminTab }: {
     const tabs: Array<{ tab: AdminTab; label: string; icon: React.ElementType }> = [
       { tab: "visao-geral", label: "Painel", icon: Activity },
       { tab: "usuarios",    label: "Usuários",icon: Users },
-      { tab: "publicacoes", label: "Públic.", icon: Package },
       { tab: "trocas",      label: "Trocas",  icon: RefreshCw },
-      { tab: "alimentos",   label: "Alimentos",icon: UtensilsCrossed },
     ];
     return (
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border">
-        <div className="flex items-center justify-around px-1 pt-1 pb-4">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="flex items-center justify-around px-1 pt-1 pb-2">
           {tabs.map(t => { const active = view==="admin" && adminTab===t.tab; return (
-            <button key={t.tab} onClick={() => { setAdminTab(t.tab); setView("admin"); }} className="flex flex-col items-center gap-1 px-2 py-1 min-w-[44px]">
+            <button key={t.tab} onClick={() => { setAdminTab(t.tab); setView("admin"); }} className="flex flex-col items-center gap-1 px-2 py-1 min-w-0 flex-1">
               <t.icon className={`w-5 h-5 transition-colors ${active?"text-primary":"text-muted-foreground"}`}/>
               <span className={`text-[9px] font-semibold ${active?"text-primary":"text-muted-foreground"}`}>{t.label}</span>
             </button>
           ); })}
+          <button onClick={() => setView("perfil")} className="flex flex-col items-center gap-1 px-2 py-1 min-w-0 flex-1">
+            <User className={`w-5 h-5 transition-colors ${view==="perfil"?"text-primary":"text-muted-foreground"}`}/>
+            <span className={`text-[9px] font-semibold ${view==="perfil"?"text-primary":"text-muted-foreground"}`}>Perfil</span>
+          </button>
         </div>
       </nav>
     );
@@ -381,8 +386,8 @@ function BottomNav({ view, setView, isAdmin, adminTab, setAdminTab }: {
     { key: "perfil",         label: "Perfil",    icon: User },
   ];
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border">
-      <div className="flex items-end justify-around px-1 pt-1 pb-4">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="flex items-end justify-around px-1 pt-1 pb-2">
         {tabs.map((tab, i) => {
           if (!tab) return (
             <button key="pub" onClick={() => setView("nova-listagem")} className="flex flex-col items-center gap-1 -mt-4">
@@ -394,7 +399,7 @@ function BottomNav({ view, setView, isAdmin, adminTab, setAdminTab }: {
           );
           const active = view===tab.key;
           return (
-            <button key={tab.key} onClick={() => setView(tab.key)} className="flex flex-col items-center gap-1 px-3 py-1 min-w-[44px]">
+            <button key={tab.key} onClick={() => setView(tab.key)} className="flex flex-col items-center gap-1 px-2 py-1 min-w-0 flex-1">
               <tab.icon className={`w-5 h-5 transition-colors ${active?"text-primary":"text-muted-foreground"}`}/>
               <span className={`text-[10px] font-semibold ${active?"text-primary":"text-muted-foreground"}`}>{tab.label}</span>
             </button>
@@ -441,7 +446,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
         </nav>
         <div className="p-4 border-t border-white/10">
           <p className="text-xs font-semibold text-primary-foreground truncate">{user.responsavel}</p>
-          <button onClick={onLogout} className="text-xs text-primary-foreground/40 hover:text-primary-foreground/80 mt-1">Sair</button>
+          <button onClick={onLogout} className="text-sm font-semibold text-primary-foreground/90 hover:text-primary-foreground mt-1">Sair da conta</button>
         </div>
       </aside>
     );
@@ -482,7 +487,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
 
 function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: ()=>void }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-dvh bg-background flex flex-col overflow-x-hidden">
       <div className="bg-primary text-primary-foreground px-5">
         <div className="max-w-md mx-auto pt-12 pb-10">
           <div className="flex items-center gap-2 mb-6">
@@ -594,12 +599,12 @@ function LoginView({ onLogin, onRegistro, onBack }: { onLogin: (email: string, s
     if (msg) setErro(msg);
   }
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-dvh bg-background flex flex-col overflow-x-hidden">
       <div className="bg-primary text-primary-foreground pt-12 pb-8">
         <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5 px-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
         <div className="max-w-md mx-auto w-full px-5 md:text-center">
           <div className="flex items-center gap-2.5 mb-2 md:justify-center"><ShoppingBasket className="w-6 h-6 text-[#E8A33D]"/><p className="text-lg font-black text-primary-foreground tracking-wide">Feira Circular</p></div>
-          <h1 className="text-3xl md:text-4xl font-black text-primary-foreground">Entrar na plataforma</h1>
+          <h1 className="text-3xl md:text-4xl font-black text-primary-foreground leading-tight break-words">Entrar na plataforma</h1>
           <p className="text-xs text-primary-foreground/40 mt-1">Use o e-mail e a senha do estabelecimento.</p>
         </div>
       </div>
@@ -650,7 +655,7 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
   const catsAtivas = categorias.filter(c => c.ativa);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background overflow-x-hidden">
       <div className="bg-primary text-primary-foreground px-5 pt-12 pb-6">
         <button onClick={onBack} className="flex items-center gap-2 text-primary-foreground/70 text-sm mb-5"><ArrowLeft className="w-4 h-4"/>Voltar</button>
         <h1 className="text-2xl font-black text-primary-foreground">Solicitar acesso</h1>
@@ -741,7 +746,7 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
   const outraParte = pendingProposta ? (pendingProposta.proponenteId===user.id ? usuarios.find(u=>u.id===listagens.find(l=>l.id===pendingProposta.listagemId)?.usuarioId) : usuarios.find(u=>u.id===pendingProposta.proponenteId)) : null;
 
   return (
-    <div className="px-4 py-5 max-w-2xl md:max-w-5xl mx-auto space-y-6">
+    <div className="px-4 py-5 max-w-2xl md:max-w-5xl mx-auto w-full min-w-0 space-y-6">
       <div><p className="text-sm text-muted-foreground">Bem-vindo</p><h1 className="text-xl font-black text-foreground">{user.responsavel.split(" ")[0]}</h1><p className="text-xs text-muted-foreground mt-0.5">{user.nome}</p></div>
 
       <div>
@@ -886,9 +891,9 @@ function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo }: 
     return true;
   });
   return (
-    <div className="max-w-2xl md:max-w-5xl mx-auto">
-      <div className="px-4 py-3 border-b border-border bg-background sticky top-0 z-10">
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+    <div className="max-w-2xl md:max-w-5xl mx-auto w-full min-w-0 overflow-x-hidden">
+      <div className="px-4 py-3 border-b border-border bg-background sticky top-0 z-10 max-w-full overflow-x-auto">
+        <div className="flex gap-1.5 pb-1 w-max">
           {(["todos","oferta","pedido"] as const).map(t=><button key={t} onClick={()=>setFiltroTipo(t)} className={`px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 transition-colors ${filtroTipo===t?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground"}`}>{t==="todos"?"Todos":t==="oferta"?"Ofertas":"Pedidos"}</button>)}
           <select value={filtroAlimento} onChange={e=>setFiltroAlimento(e.target.value)} className="px-3 py-1.5 rounded-full border border-border bg-white text-xs text-foreground focus:outline-none flex-shrink-0">
             <option value="">Alimento</option>
@@ -1625,26 +1630,15 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   ];
 
   return (
-    <div className="max-w-4xl xl:max-w-6xl mx-auto">
-      <div className="border-b border-border bg-background sticky top-0 z-10 px-4">
-        <div className="flex gap-1 overflow-x-auto py-2">
+    <div className="max-w-4xl xl:max-w-6xl mx-auto w-full min-w-0 overflow-x-hidden">
+      <div className="border-b border-border bg-background sticky top-0 z-10 max-w-full overflow-x-auto">
+        <div className="flex gap-1 px-4 py-2 w-max">
           {TABS.map(t=><button key={t.key} onClick={()=>setTab(t.key)} className={`px-3 py-2 rounded-lg text-xs font-bold flex-shrink-0 transition-colors ${tab===t.key?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-muted"}`}>{t.label}</button>)}
         </div>
       </div>
       <div className="px-4 py-5">
         {tab==="visao-geral" && (
           <div className="space-y-6">
-            {pendentes.length>0&&(
-              <div className="bg-[#E8A33D]/10 border border-[#E8A33D]/30 rounded-xl p-4">
-                <p className="text-xs font-bold text-[#B87A00] uppercase tracking-widest mb-3">Cadastros aguardando aprovação</p>
-                {pendentes.map(u=>(
-                  <div key={u.id} className="flex items-center justify-between gap-3 py-2 border-b border-[#E8A33D]/20 last:border-0">
-                    <div><p className="text-sm font-semibold text-foreground">{u.nome}</p><p className="text-xs text-muted-foreground">{u.responsavel} · {u.tipo} · {fmtDate(u.criadoEm)}</p></div>
-                    <div className="flex gap-2"><Btn size="sm" onClick={()=>onApprove(u.id)}><Check className="w-3 h-3"/>Aprovar</Btn><Btn size="sm" variant="danger" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3 h-3"/></Btn></div>
-                  </div>
-                ))}
-              </div>
-            )}
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Situação atual</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1666,8 +1660,8 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Publicações por tipo</p><div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={[{nome:"Ofertas",total:listagens.filter(l=>l.tipo==="oferta").length},{nome:"Pedidos",total:listagens.filter(l=>l.tipo==="pedido").length}]}><XAxis dataKey="nome" tick={{fontSize:11}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Bar dataKey="total" fill="#2F6B5E" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>
-              <div className="bg-card border border-border rounded-xl p-4"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Status das trocas</p><div className="h-52"><ResponsiveContainer width="100%" height="100%"><BarChart layout="vertical" data={[{nome:"Em negociação",total:propostas.filter(p=>["proposto","contraproposto"].includes(p.status)).length,cor:"#E8A33D"},{nome:"Agendadas",total:propostas.filter(p=>p.status==="encontro-agendado").length,cor:"#ca8a04"},{nome:"Concluídas",total:propostas.filter(p=>p.status==="concluido").length,cor:"#2F6B5E"},{nome:"Com problema",total:propostas.filter(p=>["divergencia","nao-compareceu","cancelado"].includes(p.status)).length,cor:"#E85D4E"}]} margin={{left:8,right:12}}><XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/><YAxis type="category" dataKey="nome" width={92} tick={{fontSize:10}}/><Tooltip formatter={(value)=>[value,"Trocas"]}/><Bar dataKey="total" radius={[0,4,4,0]}>{["#E8A33D","#ca8a04","#2F6B5E","#E85D4E"].map(c=><Cell key={c} fill={c}/>)}</Bar></BarChart></ResponsiveContainer></div></div>
+              <div className="bg-card border border-border rounded-xl p-4 min-w-0 overflow-hidden"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Publicações por tipo</p><div className="h-48 w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><BarChart data={[{nome:"Ofertas",total:listagens.filter(l=>l.tipo==="oferta").length},{nome:"Pedidos",total:listagens.filter(l=>l.tipo==="pedido").length}]}><XAxis dataKey="nome" tick={{fontSize:11}}/><YAxis allowDecimals={false} tick={{fontSize:11}}/><Tooltip/><Bar dataKey="total" fill="#2F6B5E" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>
+              <div className="bg-card border border-border rounded-xl p-4 min-w-0 overflow-hidden"><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Status das trocas</p><div className="h-52 w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><BarChart layout="vertical" data={[{nome:"Em negociação",total:propostas.filter(p=>["proposto","contraproposto"].includes(p.status)).length,cor:"#E8A33D"},{nome:"Agendadas",total:propostas.filter(p=>p.status==="encontro-agendado").length,cor:"#ca8a04"},{nome:"Concluídas",total:propostas.filter(p=>p.status==="concluido").length,cor:"#2F6B5E"},{nome:"Com problema",total:propostas.filter(p=>["divergencia","nao-compareceu","cancelado"].includes(p.status)).length,cor:"#E85D4E"}]} margin={{left:8,right:12}}><XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/><YAxis type="category" dataKey="nome" width={80} tick={{fontSize:10}}/><Tooltip formatter={(value)=>[value,"Trocas"]}/><Bar dataKey="total" radius={[0,4,4,0]}>{["#E8A33D","#ca8a04","#2F6B5E","#E85D4E"].map(c=><Cell key={c} fill={c}/>)}</Bar></BarChart></ResponsiveContainer></div></div>
             </div>
           </div>
         )}
@@ -2102,7 +2096,7 @@ export default function App() {
   const isNested = (["detalhes","nova-listagem","chat"] as View[]).includes(view);
 
   async function handleLogin(email: string, senha: string): Promise<string|null> {
-    if (!supabase) return "Configure o Supabase no arquivo .env.";
+    if (!supabase) return "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.";
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
     if (error || !data.user) {
       const texto = error?.message?.toLowerCase() ?? "";
@@ -2138,7 +2132,7 @@ export default function App() {
   }
   async function handleRegistro(data: Partial<Usuario>) {
     if (!supabase) {
-      showToast("Configure o Supabase no arquivo .env antes de criar uma conta.");
+      showToast("Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.");
       return;
     }
     const { data: authData, error } = await supabase.auth.signUp({
@@ -2284,7 +2278,7 @@ export default function App() {
     setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast(updates.fotoUrl?"Foto do perfil salva.":"Dados atualizados.");
   }
   async function handleChangePassword(nova: string): Promise<string|null> {
-    if (!supabase) return "Configure o Supabase no arquivo .env.";
+    if (!supabase) return "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.";
     const { error } = await supabase.auth.updateUser({ password: nova });
     if (error) return traduzirErroAuth(error.message);
     return null;
@@ -2332,13 +2326,13 @@ export default function App() {
         />
       )}
 
-      <div className="flex h-dvh min-h-screen bg-background overflow-hidden">
+      <div className="flex h-dvh w-full max-w-full bg-background overflow-hidden">
         <div className="hidden md:flex w-60 flex-shrink-0 min-h-0">
           <Sidebar user={user} view={view} setView={setView} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)} onLogout={handleLogout} adminTab={adminTab} setAdminTab={setAdminTab}/>
         </div>
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <TopBar title={topBarTitle} onBack={isNested?()=>{ if(view==="chat")setView(fromView||"detalhes"); else setView(fromView); }:undefined} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)}/>
-          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${!isNested?"pb-20 md:pb-0":""}`}>
+          <TopBar title={topBarTitle} onBack={isNested?()=>{ if(view==="chat")setView(fromView||"detalhes"); else setView(fromView); }:undefined} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)} onLogout={isAdminUser(user)?handleLogout:undefined}/>
+          <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain ${!isNested?"pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0":""}`}>
             {renderMain()}
           </div>
         </div>

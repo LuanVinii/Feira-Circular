@@ -18,6 +18,7 @@ export interface ConfirmacaoEncontro {
   criadaEm: string;
 }
 
+export type StatusEncontro = "proposto" | "aceito" | "recusado" | "cancelado";
 export interface Encontro {
   id: string;
   propostaId: string;
@@ -26,6 +27,8 @@ export interface Encontro {
   local: string;
   criadoEm: string;
   alteracoes: Array<{ campo: string; de: string; para: string; em: string }>;
+  status: StatusEncontro;
+  propostoPorId: string;
 }
 
 export interface Usuario {
@@ -226,6 +229,8 @@ export async function fetchPlatformState(): Promise<PlatformState> {
       local: String(e.location),
       criadoEm: String(e.created_at),
       alteracoes: Array.isArray(e.changes) ? e.changes as Encontro["alteracoes"] : [],
+      status: ((e.status as Encontro["status"]) || "aceito"),
+      propostoPorId: e.proposed_by ? String(e.proposed_by) : "",
     })),
     mensagens: (messages ?? []).map((m: Record<string, unknown>) => ({
       id: String(m.id),

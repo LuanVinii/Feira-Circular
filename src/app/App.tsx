@@ -3,7 +3,7 @@ import type React from "react";
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
 import {
   Leaf, Package, Bell, Plus, Home, MessageSquare,
-  ChevronRight, ChevronLeft, ArrowLeft, Check, Clock,
+  ChevronRight, ChevronLeft, ChevronDown, ArrowLeft, Check, Clock,
   MapPin, User, Shield, Send,
   CheckCircle2, Timer, Camera, X, Eye,
   Info, RefreshCw, AlertCircle, ClipboardList,
@@ -40,6 +40,7 @@ interface ConfirmacaoEncontro {
   criadaEm: string;
 }
 
+type StatusEncontro = "proposto" | "aceito" | "recusado" | "cancelado";
 interface Encontro {
   id: string;
   propostaId: string;
@@ -48,6 +49,8 @@ interface Encontro {
   local: string;
   criadoEm: string;
   alteracoes: Array<{ campo: string; de: string; para: string; em: string }>;
+  status: StatusEncontro;
+  propostoPorId: string;
 }
 
 interface Usuario {
@@ -172,7 +175,18 @@ function isDiaEncontroPassado(e: Encontro): boolean { return TODAY > e.data; }
 function isConfirmacaoPendente(p: Proposta, encontros: Encontro[]): boolean {
   if (p.status !== "encontro-agendado") return false;
   const e = encontros.find(x => x.propostaId === p.id);
-  return !!e && isDiaEncontroPassado(e);
+  return !!e && (e.status === "aceito" || !e.status) && isDiaEncontroPassado(e);
+}
+
+function ultimoEncontro(propostaIds: string[], encontros: Encontro[]): Encontro | undefined {
+  const ids = new Set(propostaIds);
+  return encontros
+    .filter(e => ids.has(e.propostaId))
+    .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())[0];
+}
+
+function encontroEmAberto(e?: Encontro): boolean {
+  return !!e && (e.status === "proposto" || e.status === "aceito" || !e.status);
 }
 
 function getPendingConfirmation(userId: string, propostas: Proposta[], listagens: Listagem[], encontros: Encontro[]): string | null {
@@ -208,7 +222,7 @@ function Inp({ label, error, note, ...p }: { label?: string; error?: string; not
   return (
     <div className="flex flex-col gap-1.5">
       {label && <label className="text-sm font-semibold text-foreground">{label}</label>}
-      <input {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm transition ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`} />
+      <input {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-base transition ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`} />
       {error && <p className="text-xs text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{error}</p>}
       {note && !error && <p className="text-xs text-muted-foreground">{note}</p>}
     </div>
@@ -219,7 +233,7 @@ function Sel({ label, error, children, ...p }: { label?: string; error?: string 
   return (
     <div className="flex flex-col gap-1.5">
       {label && <label className="text-sm font-semibold text-foreground">{label}</label>}
-      <select {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm transition ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`}>{children}</select>
+      <select {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-base transition ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`}>{children}</select>
       {error && <p className="text-xs text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{error}</p>}
     </div>
   );
@@ -229,7 +243,7 @@ function Txa({ label, error, ...p }: { label?: string; error?: string } & Textar
   return (
     <div className="flex flex-col gap-1.5">
       {label && <label className="text-sm font-semibold text-foreground">{label}</label>}
-      <textarea {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm transition resize-none ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`} />
+      <textarea {...p} className={`w-full px-3 py-3 rounded-lg border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-base transition resize-none ${error?"border-[#E85D4E]":"border-border"} ${p.className??""}`} />
       {error && <p className="text-xs text-[#E85D4E] flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{error}</p>}
     </div>
   );
@@ -731,9 +745,9 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
   const proximosEncontros = propostas.filter(p => {
     if(p.status!=="encontro-agendado")return false;
     const l=listagens.find(x=>x.id===p.listagemId);
-    if(l?.usuarioId!==user.id&&p.proponenteId!==user.id)return false;
+    if(l?.usuarioId!==user.id && p.proponenteId!==user.id)return false;
     const e=encontros.find(x=>x.propostaId===p.id);
-    return e && !isDiaEncontroPassado(e);
+    return !!e && (e.status==="aceito" || !e.status) && !isDiaEncontroPassado(e);
   });
   const oportunidades = listagens
     .filter(l => l.status === "ativa" && l.tipo === "oferta" && l.usuarioId !== user.id && user.alimentosInteresse.includes(l.alimento))
@@ -1600,6 +1614,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const [novaCategoria, setNovaCategoria] = useState("");
   const [editingCategoria, setEditingCategoria] = useState<string|null>(null);
   const [catEditNome, setCatEditNome] = useState("");
+  const [pendentesAberto, setPendentesAberto] = useState(true);
 
   const pendentes=usuarios.filter(u=>u.status==="pendente");
   const aprovados=usuarios.filter(u=>u.status==="aprovado"&&!isAdminUser(u));
@@ -1607,7 +1622,7 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const rejeitados=usuarios.filter(u=>u.status==="rejeitado");
   const divergencias=propostas.filter(p=>p.status==="divergencia");
   const confirmacoesPendentes=propostas.filter(p=>isConfirmacaoPendente(p,encontros)&&p.confirmacoes.length<2);
-  const encontrosAgendados=encontros.filter(e=>{ const p=propostas.find(x=>x.id===e.propostaId); return p?.status==="encontro-agendado"; });
+  const encontrosAgendados=encontros.filter(e=>{ const p=propostas.find(x=>x.id===e.propostaId); return p?.status==="encontro-agendado" && (e.status==="aceito" || !e.status); });
 
   function execModal() {
     if(!modal)return;
@@ -1713,21 +1728,27 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
           <div className="space-y-6">
             {pendentes.length>0&&(
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Aguardando aprovação ({pendentes.length})</p>
+                <button type="button" onClick={()=>setPendentesAberto(v=>!v)} className="w-full flex items-center justify-between gap-3 mb-3">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Aguardando aprovação ({pendentes.length})</p>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${pendentesAberto?"":"-rotate-90"}`}/>
+                </button>
+                {pendentesAberto&&(
                 <div className="space-y-3">
                   {pendentes.map(u=>(
                     <div key={u.id} className="bg-card border border-border rounded-xl p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                        <div className="min-w-0"><p className="font-bold text-foreground break-words">{u.nome}</p><p className="text-xs text-muted-foreground capitalize break-words">{u.tipo} · {u.responsavel}</p></div>
-                        <div className="flex gap-2 flex-shrink-0"><Btn size="sm" onClick={()=>onApprove(u.id)}><Check className="w-3.5 h-3.5"/>Aprovar</Btn><Btn size="sm" variant="danger" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3.5 h-3.5"/></Btn></div>
-                      </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
+                      <div className="min-w-0 mb-3"><p className="font-bold text-foreground break-words">{u.nome}</p><p className="text-xs text-muted-foreground capitalize break-words">{u.tipo} · {u.responsavel}</p></div>
+                      <div className="text-xs text-muted-foreground space-y-1 mb-3">
                         <p><MapPin className="w-3 h-3 inline mr-1"/>{u.endereco}</p>
                         <p><ClipboardList className="w-3 h-3 inline mr-1"/>{u.cnpjCpf} · {u.email}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Btn size="sm" className="w-full" onClick={()=>onApprove(u.id)}><Check className="w-3.5 h-3.5"/>Aprovar</Btn>
+                        <Btn size="sm" variant="danger" className="w-full" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3.5 h-3.5"/>Recusar</Btn>
                       </div>
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             )}
             <div>

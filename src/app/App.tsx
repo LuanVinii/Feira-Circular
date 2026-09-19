@@ -532,7 +532,7 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
           </div>
         </div>
       </div>
-      <div className="flex-1 px-5 py-8 max-w-md md:max-w-4xl mx-auto w-full space-y-6">
+      <div className="flex-1 px-5 py-8 max-w-md md:max-w-4xl mx-auto w-full min-w-0 overflow-x-hidden space-y-6">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">O que você encontra aqui</p>
           <div className="grid grid-cols-2 gap-2">
@@ -622,7 +622,7 @@ function LoginView({ onLogin, onRegistro, onBack }: { onLogin: (email: string, s
           <p className="text-xs text-primary-foreground/40 mt-1">Use o e-mail e a senha do estabelecimento.</p>
         </div>
       </div>
-      <div className="flex-1 px-5 py-4 max-w-md mx-auto w-full">
+      <div className="flex-1 px-5 py-4 max-w-md mx-auto w-full min-w-0 overflow-x-hidden">
         <form onSubmit={submit} className="space-y-4">
           <Inp label="E-mail" type="email" value={email} autoComplete="email" onChange={e=>{setEmail(e.target.value);setErro("")}} placeholder="contato@estabelecimento.com" />
           <Inp label="Senha" type="password" value={senha} autoComplete="current-password" onChange={e=>{setSenha(e.target.value);setErro("")}} placeholder="Sua senha" />
@@ -675,7 +675,7 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
         <h1 className="text-2xl font-black text-primary-foreground">Solicitar acesso</h1>
         <div className="flex gap-1.5 mt-4">{[1,2,3].map(s=><div key={s} className={`h-1 flex-1 rounded-full transition-colors ${step>=s?"bg-white":"bg-white/25"}`}/>)}</div>
       </div>
-      <div className="max-w-lg mx-auto px-5 py-6">
+      <div className="max-w-lg mx-auto px-5 py-6 w-full min-w-0 overflow-x-hidden">
         {step===1 && (
           <div className="space-y-4">
             <h2 className="font-bold text-foreground mb-4">Dados do estabelecimento</h2>
@@ -760,7 +760,7 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
   const outraParte = pendingProposta ? (pendingProposta.proponenteId===user.id ? usuarios.find(u=>u.id===listagens.find(l=>l.id===pendingProposta.listagemId)?.usuarioId) : usuarios.find(u=>u.id===pendingProposta.proponenteId)) : null;
 
   return (
-    <div className="px-4 py-5 max-w-2xl md:max-w-5xl mx-auto w-full min-w-0 space-y-6">
+    <div className="px-4 py-5 max-w-2xl md:max-w-5xl mx-auto w-full min-w-0 overflow-x-hidden space-y-6">
       <div><p className="text-sm text-muted-foreground">Bem-vindo</p><h1 className="text-xl font-black text-foreground">{user.responsavel.split(" ")[0]}</h1><p className="text-xs text-muted-foreground mt-0.5">{user.nome}</p></div>
 
       <div>
@@ -824,12 +824,12 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Aguardando sua resposta</p>
           {aguardandoResposta.map(p => (
             <button key={p.id} onClick={()=>navTo("detalhes",p.listagemId,"dashboard")} className="w-full text-left bg-card border border-border rounded-lg p-4 flex items-center justify-between active:opacity-80 mb-2">
-              <div>
+              <div className="min-w-0 flex-1 mr-2 break-words">
                 <p className="text-xs font-bold text-[#B87A00] uppercase mb-0.5">Proposta recebida</p>
                 <p className="text-sm font-semibold text-foreground">{nomeAlimento(p.oferecem.alimento,alimentosBD)} {fmtQtd(p.oferecem.quantidadeG)} por {nomeAlimento(p.querem.alimento,alimentosBD)}</p>
                 <p className="text-xs text-muted-foreground">{usuarios.find(u=>u.id===p.proponenteId)?.nome}</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground"/>
+              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0"/>
             </button>
           ))}
         </div>
@@ -958,7 +958,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6">
+    <div className="max-w-lg mx-auto px-4 py-6 w-full min-w-0 overflow-x-hidden">
       <div className="flex gap-1.5 mb-6">{[1,2,3].map(s=><div key={s} className={`h-1 flex-1 rounded-full transition-colors ${step>=s?"bg-primary":"bg-muted"}`}/>)}</div>
       {step===1 && (
         <div className="space-y-5">
@@ -1022,12 +1022,28 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
 
 // ─── CHAT VIEW ─────────────────────────────────────────────────────────────────
 
-function ChatView({ rootPropostaId, mensagens, propostas, listagens, usuarios, user, alimentosBD, onSend, onBack }: {
+function ChatView({
+  rootPropostaId, mensagens, propostas, listagens, usuarios, user,
+  encontros, alimentosBD, onSend, onProporEncontro, onAceitarEncontro,
+  onRecusarEncontro, onContrapropostaEncontro, onCancelarEncontro, onBack
+}: {
   rootPropostaId: string; mensagens: Mensagem[]; propostas: Proposta[];
-  listagens: Listagem[]; usuarios: Usuario[]; user: Usuario; alimentosBD: AlimentoBD[];
-  onSend: (texto: string)=>void; onBack: ()=>void;
+  listagens: Listagem[]; usuarios: Usuario[]; user: Usuario;
+  encontros: Encontro[]; alimentosBD: AlimentoBD[];
+  onSend: (texto: string)=>void;
+  onProporEncontro: (propostaId: string, data: string, horario: string, local: string)=>void;
+  onAceitarEncontro: (encontroId: string)=>void;
+  onRecusarEncontro: (encontroId: string)=>void;
+  onContrapropostaEncontro: (encontroId: string, data: string, horario: string, local: string)=>void;
+  onCancelarEncontro: (encontroId: string)=>void;
+  onBack: ()=>void;
 }) {
   const [input, setInput] = useState("");
+  const [showAgendarModal, setShowAgendarModal] = useState(false);
+  const [agModalModo, setAgModalModo] = useState<"propor"|"contraproposta">("propor");
+  const [alvoEncontroId, setAlvoEncontroId] = useState<string|null>(null);
+  const [agForm, setAgForm] = useState({ data: "", horario: "", local: "" });
+  const [agErrors, setAgErrors] = useState<Errors>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const proposta = propostas.find(p => p.id === rootPropostaId);
@@ -1035,14 +1051,22 @@ function ChatView({ rootPropostaId, mensagens, propostas, listagens, usuarios, u
 
   const todasProp = proposta ? propostas.filter(p => p.listagemId === proposta.listagemId) : [];
   const chain = buildChain(todasProp);
+  const chainIds = new Set(chain.map(p => p.id));
+  const chatEncontros = encontros.filter(e => chainIds.has(e.propostaId));
+  const ultimoEncontro = [...chatEncontros].sort((a,b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())[0];
 
   const chatMsgs = mensagens.filter(m => m.rootPropostaId === rootPropostaId).sort((a,b)=>new Date(a.criadaEm).getTime()-new Date(b.criadaEm).getTime());
 
-  // Merge messages and proposals into timeline
-  type TimelineItem = { time: string } & ({ kind: "msg"; msg: Mensagem } | { kind: "proposta"; p: Proposta });
+  // Merge messages, proposals and encounters into timeline
+  type TimelineItem = { time: string } & (
+    | { kind: "msg"; msg: Mensagem }
+    | { kind: "proposta"; p: Proposta }
+    | { kind: "encontro"; e: Encontro }
+  );
   const timeline: TimelineItem[] = [
     ...chatMsgs.map(m => ({ time: m.criadaEm, kind: "msg" as const, msg: m })),
     ...chain.map(p => ({ time: p.criadoEm, kind: "proposta" as const, p })),
+    ...chatEncontros.map(e => ({ time: e.criadoEm, kind: "encontro" as const, e })),
   ].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [timeline.length]);
@@ -1052,41 +1076,97 @@ function ChatView({ rootPropostaId, mensagens, propostas, listagens, usuarios, u
     onSend(t); setInput("");
   }
 
+  function abrirProporEncontro() {
+    setAgModalModo("propor");
+    setAlvoEncontroId(null);
+    setAgForm({ data: "", horario: "", local: "Centro de Abastecimento - " });
+    setAgErrors({});
+    setShowAgendarModal(true);
+  }
+
+  function abrirContraproposta(e: Encontro) {
+    setAgModalModo("contraproposta");
+    setAlvoEncontroId(e.id);
+    setAgForm({ data: e.data, horario: e.horario, local: e.local });
+    setAgErrors({});
+    setShowAgendarModal(true);
+  }
+
+  function submitAgendar() {
+    const errs: Errors = {};
+    if (!agForm.data) errs.data = "Informe a data do encontro.";
+    if (!agForm.horario) errs.horario = "Informe o horário.";
+    if (!agForm.local.trim()) errs.local = "Informe o local no Centro de Abastecimento.";
+    setAgErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    if (agModalModo === "contraproposta" && alvoEncontroId) {
+      onContrapropostaEncontro(alvoEncontroId, agForm.data, agForm.horario, agForm.local.trim());
+    } else {
+      const targetPropId = chain[chain.length - 1]?.id ?? rootPropostaId;
+      onProporEncontro(targetPropId, agForm.data, agForm.horario, agForm.local.trim());
+    }
+    setShowAgendarModal(false);
+  }
+
   const contraparte = proposta?.proponenteId === user.id
     ? usuarios.find(u => u.id === listagem?.usuarioId)
     : usuarios.find(u => u.id === proposta?.proponenteId);
 
   return (
-    <div className="flex flex-col h-full max-w-2xl mx-auto">
+    <div className="flex flex-col h-full max-w-2xl mx-auto w-full min-w-0 overflow-x-hidden">
       {/* Chat header */}
-      <div className="px-4 py-3 border-b border-border bg-background flex items-center gap-3 flex-shrink-0">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${contraparte?.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>
-          {contraparte?.nome.charAt(0)}
+      <div className="px-4 py-3 border-b border-border bg-background flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${contraparte?.tipo==="restaurante"?"bg-primary":"bg-[#E8A33D]"}`}>
+            {contraparte?.nome.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-foreground text-sm truncate">{contraparte?.nome}</p>
+            {listagem && <p className="text-xs text-muted-foreground truncate">{nomeAlimento(listagem.alimento, alimentosBD)} · {fmtQtd(listagem.quantidadeG)}</p>}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground text-sm truncate">{contraparte?.nome}</p>
-          {listagem && <p className="text-xs text-muted-foreground">{nomeAlimento(listagem.alimento, alimentosBD)} · {fmtQtd(listagem.quantidadeG)}</p>}
-        </div>
+
+        {/* Action to schedule or reschedule meeting in chat */}
+        <button
+          type="button"
+          onClick={() => {
+            if (ultimoEncontro && (ultimoEncontro.status === "aceito" || ultimoEncontro.status === "proposto")) {
+              abrirContraproposta(ultimoEncontro);
+            } else {
+              abrirProporEncontro();
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0 shadow-sm"
+        >
+          <CalendarCheck className="w-3.5 h-3.5"/>
+          <span className="hidden sm:inline">
+            {ultimoEncontro && ultimoEncontro.status === "aceito" ? "Remarcar Encontro" : "Agendar Encontro"}
+          </span>
+          <span className="sm:hidden">
+            {ultimoEncontro && ultimoEncontro.status === "aceito" ? "Remarcar" : "Agendar"}
+          </span>
+        </button>
       </div>
 
-      {/* Messages */}
+      {/* Messages & Timeline */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {timeline.map((item, i) => {
+        {timeline.map((item) => {
           if (item.kind === "msg") {
             const m = item.msg;
             const isMe = m.autorId === user.id;
             const isSistema = m.tipo === "sistema";
             if (isSistema) return (
-              <div key={m.id} className="flex justify-center">
-                <div className="bg-muted text-muted-foreground text-xs px-3 py-1.5 rounded-full max-w-[85%] text-center">{m.texto}</div>
+              <div key={m.id} className="flex justify-center my-1">
+                <div className="bg-muted text-muted-foreground text-xs px-3 py-1.5 rounded-full max-w-[85%] text-center break-words">{m.texto}</div>
               </div>
             );
             const autor = usuarios.find(u => u.id === m.autorId);
             return (
               <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[78%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-1`}>
-                  {!isMe && <p className="text-[10px] text-muted-foreground px-1">{autor?.responsavel.split(" ")[0]}</p>}
-                  <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm"}`}>
+                <div className={`max-w-[78%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-1 min-w-0`}>
+                  {!isMe && <p className="text-[10px] text-muted-foreground px-1 truncate">{autor?.responsavel.split(" ")[0]}</p>}
+                  <div className={`px-3 py-2 rounded-2xl text-sm break-words ${isMe ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm"}`}>
                     {m.texto}
                   </div>
                   <p className="text-[10px] text-muted-foreground px-1">{fmtHora(m.criadaEm)}</p>
@@ -1094,31 +1174,186 @@ function ChatView({ rootPropostaId, mensagens, propostas, listagens, usuarios, u
               </div>
             );
           }
-          // Proposta card in timeline
-          const p = item.p;
-          const isMe = p.proponenteId === user.id;
-          return (
-            <div key={p.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-[85%] w-full">
-                <div className={`border rounded-xl p-3 ${isMe ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Proposta v{p.versao}</p>
-                    <StatusDot s={p.status}/>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-primary/5 rounded-lg p-2">
-                      <p className="font-bold text-[10px] text-primary uppercase mb-1">Ofereço</p>
-                      <p className="font-semibold text-foreground">{nomeAlimento(p.oferecem.alimento, alimentosBD)}</p>
-                      <p className="text-muted-foreground">{fmtQtd(p.oferecem.quantidadeG)} · {MAT[p.oferecem.maturacao].label}</p>
+
+          if (item.kind === "proposta") {
+            const p = item.p;
+            const isMe = p.proponenteId === user.id;
+            return (
+              <div key={p.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                <div className="max-w-[85%] w-full min-w-0">
+                  <div className={`border rounded-xl p-3 ${isMe ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Proposta v{p.versao}</p>
+                      <StatusDot s={p.status}/>
                     </div>
-                    <div className="bg-muted rounded-lg p-2">
-                      <p className="font-bold text-[10px] text-muted-foreground uppercase mb-1">Peço</p>
-                      <p className="font-semibold text-foreground">{nomeAlimento(p.querem.alimento, alimentosBD)}</p>
-                      <p className="text-muted-foreground">{fmtQtd(p.querem.quantidadeG)} · {MAT[p.querem.maturacao].label}</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-primary/5 rounded-lg p-2 min-w-0">
+                        <p className="font-bold text-[10px] text-primary uppercase mb-1">Ofereço</p>
+                        <p className="font-semibold text-foreground break-words">{nomeAlimento(p.oferecem.alimento, alimentosBD)}</p>
+                        <p className="text-muted-foreground break-words">{fmtQtd(p.oferecem.quantidadeG)} · {MAT[p.oferecem.maturacao].label}</p>
+                      </div>
+                      <div className="bg-muted rounded-lg p-2 min-w-0">
+                        <p className="font-bold text-[10px] text-muted-foreground uppercase mb-1">Peço</p>
+                        <p className="font-semibold text-foreground break-words">{nomeAlimento(p.querem.alimento, alimentosBD)}</p>
+                        <p className="text-muted-foreground break-words">{fmtQtd(p.querem.quantidadeG)} · {MAT[p.querem.maturacao].label}</p>
+                      </div>
                     </div>
+                    <p className="text-[10px] text-muted-foreground mt-2 text-right">{fmtDT(p.criadoEm)}</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-2 text-right">{fmtDT(p.criadoEm)}</p>
                 </div>
+              </div>
+            );
+          }
+
+          // Meeting Proposal Card in Chat Timeline
+          const e = item.e;
+          const isProponente = e.propostoPorId === user.id;
+          const autorProp = usuarios.find(u => u.id === e.propostoPorId);
+          const dataFmt = new Date(e.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+          const isAceito = e.status === "aceito";
+          const isProposto = e.status === "proposto";
+          const isRecusado = e.status === "recusado";
+          const isCancelado = e.status === "cancelado";
+
+          return (
+            <div key={e.id} className="flex justify-center my-3">
+              <div className={`w-full max-w-md rounded-2xl border p-4 shadow-sm transition-all ${
+                isAceito ? "bg-emerald-50/80 border-emerald-300 dark:bg-emerald-950/20" :
+                isProposto ? "bg-amber-50/80 border-amber-300 dark:bg-amber-950/20" :
+                isRecusado ? "bg-red-50/70 border-red-200 dark:bg-red-950/20" :
+                "bg-muted/50 border-border"
+              }`}>
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-border/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CalendarCheck className={`w-4 h-4 flex-shrink-0 ${
+                      isAceito ? "text-emerald-600" :
+                      isProposto ? "text-amber-600" :
+                      isRecusado ? "text-red-500" : "text-muted-foreground"
+                    }`} />
+                    <p className="font-bold text-xs uppercase tracking-wider text-foreground truncate">
+                      {isAceito ? "Encontro Fechado e Confirmado" :
+                       isProposto ? (isProponente ? "Proposta de Encontro Enviada" : "Proposta de Encontro Recebida") :
+                       isRecusado ? "Proposta de Encontro Não Aceita" : "Encontro Cancelado"}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex-shrink-0 ${
+                    isAceito ? "bg-emerald-100 text-emerald-800" :
+                    isProposto ? "bg-amber-100 text-amber-800" :
+                    isRecusado ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {isAceito ? "Confirmado" : isProposto ? "Pendente" : isRecusado ? "Recusado" : "Cancelado"}
+                  </span>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-1.5 text-xs text-foreground mb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <span className="font-semibold">{dataFmt} às {e.horario}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <span className="break-words">{e.local}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    Proposto por: <span className="font-medium text-foreground">{isProponente ? "Você" : (autorProp?.nome ?? "Outra parte")}</span>
+                  </p>
+                </div>
+
+                {/* Actions depending on state */}
+                {isProposto && (
+                  !isProponente ? (
+                    <div className="space-y-2 pt-1 border-t border-border/50">
+                      <p className="text-[11px] text-amber-900 font-medium">Você aceita este horário e local para fechar a troca?</p>
+                      <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onAceitarEncontro(e.id)}
+                          className="flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-[#2F6B5E] text-white hover:bg-[#25564b] transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Aceitar Encontro</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => abrirContraproposta(e)}
+                          className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold border border-primary text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Contraproposta</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRecusarEncontro(e.id)}
+                          className="py-2 px-2.5 rounded-lg text-xs font-semibold text-[#E85D4E] hover:bg-red-50 transition-colors flex items-center justify-center gap-1"
+                          title="Recusar proposta"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Recusar</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs">
+                      <span className="text-[11px] text-muted-foreground italic">Aguardando resposta da outra parte...</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => abrirContraproposta(e)}
+                          className="text-xs text-primary font-semibold hover:underline"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onCancelarEncontro(e.id)}
+                          className="text-xs text-muted-foreground hover:text-[#E85D4E]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {isAceito && (
+                  <div className="pt-2 border-t border-emerald-200/80 space-y-2">
+                    <p className="text-[11px] text-emerald-800">
+                      Ambas as partes aceitaram! No dia combinado, compareça com sua balança ao local indicado.
+                    </p>
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => abrirContraproposta(e)}
+                        className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Remarcar (Contraproposta)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if(window.confirm("Deseja realmente cancelar este encontro agendado?")) onCancelarEncontro(e.id); }}
+                        className="text-xs text-muted-foreground hover:text-[#E85D4E]"
+                      >
+                        Cancelar encontro
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(isRecusado || isCancelado) && (
+                  <div className="pt-2 border-t border-border/50 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={abrirProporEncontro}
+                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                    >
+                      <CalendarCheck className="w-3 h-3" />
+                      <span>Propor nova data/local</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -1129,18 +1364,97 @@ function ChatView({ rootPropostaId, mensagens, propostas, listagens, usuarios, u
       {/* Input */}
       <div className="px-4 py-3 border-t border-border bg-background flex-shrink-0">
         <div className="flex gap-2 items-end">
-          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}} placeholder="Mensagem..." rows={1} className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"/>
-          <button onClick={sendMsg} disabled={!input.trim()} className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white disabled:opacity-40 flex-shrink-0"><Send className="w-4 h-4"/></button>
+          <textarea
+            value={input}
+            onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}}
+            placeholder="Mensagem..."
+            rows={1}
+            className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+          />
+          <button
+            onClick={sendMsg}
+            disabled={!input.trim()}
+            className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white disabled:opacity-40 flex-shrink-0"
+          >
+            <Send className="w-4 h-4"/>
+          </button>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-2">Para negociar a proposta formal, use a tela de detalhes da publicação.</p>
+        <div className="flex items-center justify-between gap-2 mt-2 text-[10px] text-muted-foreground">
+          <span>Combine os detalhes aqui e envie propostas de encontro pelo chat.</span>
+          <button
+            type="button"
+            onClick={abrirProporEncontro}
+            className="text-primary font-semibold hover:underline flex-shrink-0"
+          >
+            + Propor encontro
+          </button>
+        </div>
       </div>
+
+      {/* Modal de Agendamento / Contraproposta no Chat */}
+      {showAgendarModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-card w-full max-w-md mx-auto rounded-2xl p-5 space-y-4 shadow-xl border border-border max-h-[90dvh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-foreground">
+                  {agModalModo === "contraproposta" ? "Contraproposta de Encontro" : "Propor Encontro"}
+                </h3>
+              </div>
+              <button onClick={() => setShowAgendarModal(false)}><X className="w-4 h-4 text-muted-foreground"/></button>
+            </div>
+            <p className="text-xs text-muted-foreground bg-muted/60 rounded-lg p-2.5 leading-relaxed">
+              {agModalModo === "contraproposta"
+                ? "Sua contraproposta será enviada aqui no chat. O encontro só será alterado quando a outra parte aceitar."
+                : "A proposta de data, horário e local aparecerá no chat para a outra parte aceitar ou sugerir alterações."}
+            </p>
+            <Inp
+              label="Data do Encontro *"
+              type="date"
+              value={agForm.data}
+              min={TODAY}
+              error={agErrors.data}
+              onChange={e => { setAgForm(f => ({ ...f, data: e.target.value })); setAgErrors(er => { const n = { ...er }; delete n.data; return n; }); }}
+            />
+            <Inp
+              label="Horário *"
+              type="time"
+              value={agForm.horario}
+              error={agErrors.horario}
+              onChange={e => { setAgForm(f => ({ ...f, horario: e.target.value })); setAgErrors(er => { const n = { ...er }; delete n.horario; return n; }); }}
+            />
+            <Inp
+              label="Ponto de Encontro no Centro de Abastecimento *"
+              placeholder="Ex: Galpão das Frutas, Box 22"
+              value={agForm.local}
+              maxLength={150}
+              error={agErrors.local}
+              onChange={e => { setAgForm(f => ({ ...f, local: e.target.value })); setAgErrors(er => { const n = { ...er }; delete n.local; return n; }); }}
+            />
+            <div className="flex gap-2 pt-2">
+              <Btn variant="ghost" onClick={() => setShowAgendarModal(false)}>Cancelar</Btn>
+              <Btn className="flex-1" onClick={submitAgendar}>
+                <Check className="w-4 h-4" />
+                {agModalModo === "contraproposta" ? "Enviar contraproposta" : "Enviar proposta"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── DETALHES ─────────────────────────────────────────────────────────────────
 
-function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encontros, alimentosBD, ocorrencias, onBack, onAddProposta, onUpdateListagem, onUpdateProposta, onRegistrarConfirmacao, onAgendarEncontro, onEditEncontro, onEditListagem, onEncerrarListagem, onReportarProblema, onOpenChat }: {
+function DetalhesView({
+  listagemId, listagens, propostas, usuarios, user, encontros, alimentosBD, ocorrencias,
+  onBack, onAddProposta, onUpdateListagem, onUpdateProposta, onRegistrarConfirmacao,
+  onAgendarEncontro, onAceitarEncontro, onRecusarEncontro, onContrapropostaEncontro, onCancelarEncontro,
+  onEditListagem, onEncerrarListagem, onReportarProblema, onOpenChat
+}: {
   listagemId: string; listagens: Listagem[]; propostas: Proposta[]; usuarios: Usuario[];
   user: Usuario; encontros: Encontro[]; alimentosBD: AlimentoBD[]; ocorrencias: OcorrenciaPos[];
   onBack: ()=>void; onAddProposta: (p: Partial<Proposta>)=>void;
@@ -1148,7 +1462,10 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
   onUpdateProposta: (id: string, u: Partial<Proposta>)=>void;
   onRegistrarConfirmacao: (propostaId: string, r: "aconteceu"|"nao-aconteceu", pesoG?: number)=>void;
   onAgendarEncontro: (propostaId: string, data: string, horario: string, local: string)=>void;
-  onEditEncontro: (eId: string, data: string, horario: string, local: string)=>void;
+  onAceitarEncontro: (encontroId: string)=>void;
+  onRecusarEncontro: (encontroId: string)=>void;
+  onContrapropostaEncontro: (encontroId: string, data: string, horario: string, local: string)=>void;
+  onCancelarEncontro: (encontroId: string)=>void;
   onEditListagem: (id: string, u: Partial<Listagem>)=>void;
   onEncerrarListagem: (id: string)=>void;
   onReportarProblema: (propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string)=>void;
@@ -1228,7 +1545,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
 
   function submitEditEncontro() {
     if(!encontroAtual)return;
-    onEditEncontro(encontroAtual.id, eeForm.data||encontroAtual.data, eeForm.horario||encontroAtual.horario, eeForm.local||encontroAtual.local);
+    onContrapropostaEncontro(encontroAtual.id, eeForm.data||encontroAtual.data, eeForm.horario||encontroAtual.horario, eeForm.local||encontroAtual.local);
     setShowEeForm(false);
   }
 
@@ -1264,7 +1581,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
   const alimentosAtivos = alimentosBD.filter(a=>a.ativo);
 
   return (
-    <div className="max-w-2xl md:max-w-4xl mx-auto">
+    <div className="max-w-2xl md:max-w-4xl mx-auto w-full min-w-0 overflow-x-hidden">
       {listagem.fotoUrl && (
         <div className="h-52 md:h-64 overflow-hidden bg-muted relative">
           <img src={listagem.fotoUrl} alt={nomeAlimento(listagem.alimento, alimentosBD)} className="w-full h-full object-cover"/>
@@ -1319,30 +1636,140 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
           )}
         </div>
 
-        {/* Encontro agendado */}
-        {ultima?.status==="encontro-agendado" && encontroAtual && !confirmacaoPendente && (
-          <div className="bg-[#E8A33D]/10 border border-[#E8A33D]/30 rounded-xl p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <CalendarCheck className="w-5 h-5 text-[#E8A33D] flex-shrink-0 mt-0.5"/>
-                <div>
-                  <p className="text-xs font-bold text-[#B87A00] uppercase tracking-widest mb-1">Encontro agendado</p>
-                  <p className="text-sm font-semibold text-foreground">{new Date(encontroAtual.data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})}</p>
-                  <p className="text-sm text-muted-foreground">{encontroAtual.horario} · {encontroAtual.local}</p>
-                  <p className="text-xs text-muted-foreground mt-2">Após o encontro, volte para confirmar se a troca aconteceu.</p>
+        {/* Encontro: Confirmado ou Proposta Pendente */}
+        {encontroAtual && !confirmacaoPendente && (
+          encontroAtual.status === "aceito" ? (
+            <div className="bg-emerald-50/80 border border-emerald-300 rounded-xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <CalendarCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5"/>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <p className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Encontro confirmado</p>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Aceito por ambos</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground break-words">{new Date(encontroAtual.data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})}</p>
+                    <p className="text-sm text-muted-foreground break-words">{encontroAtual.horario} · {encontroAtual.local}</p>
+                    <p className="text-xs text-muted-foreground mt-2">Após o encontro, volte para confirmar se a troca aconteceu.</p>
+                  </div>
+                </div>
+                {envolvido && (
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={()=>{ setEeForm({data:encontroAtual.data,horario:encontroAtual.horario,local:encontroAtual.local});setShowEeForm(true); }}
+                      className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3"/>Remarcar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={()=>{ if(window.confirm("Deseja realmente cancelar este encontro agendado?")) onCancelarEncontro(encontroAtual.id); }}
+                      className="text-xs text-muted-foreground hover:text-[#E85D4E]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : encontroAtual.status === "proposto" ? (
+            <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <CalendarCheck className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"/>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xs font-bold text-amber-800 uppercase tracking-widest">Proposta de encontro pendente</p>
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Aguardando aceite</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground break-words">{new Date(encontroAtual.data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})}</p>
+                    <p className="text-sm text-muted-foreground break-words">{encontroAtual.horario} · {encontroAtual.local}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {encontroAtual.propostoPorId === user.id
+                        ? "Você propôs este encontro. Aguardando a outra parte aceitar."
+                        : "A outra parte propôs este horário e local para a troca."}
+                    </p>
+                  </div>
                 </div>
               </div>
-              {envolvido && <button onClick={()=>{ setEeForm({data:encontroAtual.data,horario:encontroAtual.horario,local:encontroAtual.local});setShowEeForm(true); }} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"><Pencil className="w-3 h-3"/>Editar</button>}
+              {envolvido && (
+                <div className="mt-3 pt-3 border-t border-amber-200/80 flex flex-wrap gap-2 items-center">
+                  {encontroAtual.propostoPorId !== user.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onAceitarEncontro(encontroAtual.id)}
+                        className="py-1.5 px-3 rounded-lg text-xs font-bold bg-[#2F6B5E] text-white hover:bg-[#25564b] transition-colors flex items-center gap-1 shadow-sm"
+                      >
+                        <Check className="w-3.5 h-3.5"/>Aceitar Encontro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setEeForm({ data: encontroAtual.data, horario: encontroAtual.horario, local: encontroAtual.local }); setShowEeForm(true); }}
+                        className="py-1.5 px-3 rounded-lg text-xs font-semibold border border-primary text-primary hover:bg-primary/5 transition-colors flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3"/>Contraproposta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRecusarEncontro(encontroAtual.id)}
+                        className="py-1.5 px-2.5 rounded-lg text-xs font-semibold text-[#E85D4E] hover:bg-red-50 transition-colors"
+                      >
+                        Recusar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setEeForm({ data: encontroAtual.data, horario: encontroAtual.horario, local: encontroAtual.local }); setShowEeForm(true); }}
+                        className="text-xs text-primary font-semibold hover:underline"
+                      >
+                        Ajustar proposta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCancelarEncontro(encontroAtual.id)}
+                        className="text-xs text-muted-foreground hover:text-[#E85D4E] ml-auto"
+                      >
+                        Cancelar proposta
+                      </button>
+                    </>
+                  )}
+                  {podeVerChat && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenChat(rootProposta.id)}
+                      className="text-xs font-semibold text-primary hover:underline ml-auto flex items-center gap-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5"/>Negociar no Chat
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          ) : null
         )}
+
         {showEeForm && encontroAtual && (
-          <div className="border border-border rounded-xl p-4 space-y-4">
-            <div className="flex items-center justify-between"><p className="font-bold text-foreground">Editar encontro</p><button onClick={()=>setShowEeForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
+          <div className="border border-border rounded-xl p-4 space-y-4 bg-card shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-foreground">Propor nova data/local (Remarcar)</p>
+              <button onClick={()=>setShowEeForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button>
+            </div>
+            <p className="text-xs text-muted-foreground bg-muted/60 rounded p-2">
+              A remarcação será enviada para a outra parte aceitar. O encontro só será alterado quando ambos concordarem.
+            </p>
             <Inp label="Nova data" type="date" value={eeForm.data} min={TODAY} onChange={e=>setEeForm(f=>({...f,data:e.target.value}))}/>
             <Inp label="Novo horário" type="time" value={eeForm.horario} onChange={e=>setEeForm(f=>({...f,horario:e.target.value}))}/>
-            <Inp label="Local" value={eeForm.local} onChange={e=>setEeForm(f=>({...f,local:e.target.value}))}/>
-            <div className="flex gap-2"><Btn variant="ghost" onClick={()=>setShowEeForm(false)}>Cancelar</Btn><Btn className="flex-1" onClick={submitEditEncontro}><Check className="w-4 h-4"/>Salvar</Btn></div>
+            <Inp label="Ponto de Encontro" value={eeForm.local} placeholder="Ex: Galpão das Frutas, Box 22" onChange={e=>setEeForm(f=>({...f,local:e.target.value}))}/>
+            <div className="flex gap-2">
+              <Btn variant="ghost" onClick={()=>setShowEeForm(false)}>Cancelar</Btn>
+              <Btn className="flex-1" onClick={submitEditEncontro}>
+                <Check className="w-4 h-4"/>Enviar contraproposta
+              </Btn>
+            </div>
           </div>
         )}
 
@@ -1430,7 +1857,7 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
                       {p.status==="divergencia"&&<div className="flex items-center gap-2 text-xs text-[#E85D4E] bg-red-50 rounded-lg px-3 py-2 mb-2"><AlertTriangle className="w-3.5 h-3.5"/>Respostas divergentes. Em análise pelo administrador.</div>}
                       <div className="flex flex-wrap gap-2">
                         {canAct&&<><Btn size="sm" onClick={()=>{ onUpdateProposta(p.id,{status:"aceito"}); onUpdateListagem(listagemId,"em-negociacao"); }}><Check className="w-3.5 h-3.5"/>Aceitar</Btn><Btn size="sm" variant="outline" onClick={()=>setShowPForm(true)}>Contrapropor</Btn><Btn size="sm" variant="ghost" className="text-muted-foreground" onClick={()=>onUpdateProposta(p.id,{status:"cancelado"})}>Recusar</Btn></>}
-                        {canSched&&<Btn size="sm" variant="secondary" onClick={()=>setShowAgForm(true)}><CalendarCheck className="w-3.5 h-3.5"/>Registrar encontro</Btn>}
+                        {canSched&&<Btn size="sm" variant="secondary" onClick={()=>setShowAgForm(true)}><CalendarCheck className="w-3.5 h-3.5"/>Propor encontro</Btn>}
                       </div>
                     </div>
                   </div>
@@ -1479,12 +1906,12 @@ function DetalhesView({ listagemId, listagens, propostas, usuarios, user, encont
         {/* Agendamento */}
         {showAgForm && (
           <div className="border border-border rounded-xl p-4 space-y-4">
-            <div className="flex items-center justify-between"><p className="font-bold text-foreground">Registrar encontro</p><button onClick={()=>setShowAgForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
-            <p className="text-xs text-muted-foreground bg-muted rounded px-3 py-2">Combine os detalhes no chat e registre aqui para confirmar a troca depois.</p>
+            <div className="flex items-center justify-between"><p className="font-bold text-foreground">Propor encontro</p><button onClick={()=>setShowAgForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
+            <p className="text-xs text-muted-foreground bg-muted rounded px-3 py-2">Sua proposta de data, horário e local será enviada para a outra parte aceitar. O encontro só fecha quando ambos concordarem.</p>
             <Inp label="Data *" type="date" value={agForm.data} min={TODAY} error={agErrors.data} onChange={e=>{setAgForm(f=>({...f,data:e.target.value}));setAgErrors(er=>{const n={...er};delete n.data;return n;});}}/>
             <Inp label="Horário *" type="time" value={agForm.horario} error={agErrors.horario} onChange={e=>{setAgForm(f=>({...f,horario:e.target.value}));setAgErrors(er=>{const n={...er};delete n.horario;return n;});}}/>
             <Inp label="Local *" placeholder="Ex: Rua Nova, Setor C, barraca 23" value={agForm.local} maxLength={200} error={agErrors.local} onChange={e=>{setAgForm(f=>({...f,local:e.target.value}));setAgErrors(er=>{const n={...er};delete n.local;return n;});}}/>
-            <div className="flex gap-2"><Btn variant="ghost" onClick={()=>setShowAgForm(false)}>Cancelar</Btn><Btn className="flex-1" onClick={submitAgendamento}><CalendarCheck className="w-4 h-4"/>Registrar</Btn></div>
+            <div className="flex gap-2"><Btn variant="ghost" onClick={()=>setShowAgForm(false)}>Cancelar</Btn><Btn className="flex-1" onClick={submitAgendamento}><CalendarCheck className="w-4 h-4"/>Enviar proposta de encontro</Btn></div>
           </div>
         )}
 
@@ -1559,9 +1986,9 @@ function MinhasTrocasView({ user, listagens, propostas, usuarios, encontros, ali
   eventos.sort((a,b)=>new Date(b.data).getTime()-new Date(a.data).getTime());
   const grupos: Record<string,Ev[]> = {};
   eventos.forEach(e=>{ const d=new Date(e.data).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}); if(!grupos[d])grupos[d]=[]; grupos[d].push(e); });
-  if(eventos.length===0)return(<div className="px-4 py-16 text-center text-muted-foreground max-w-lg mx-auto"><RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-sm">Nenhuma atividade ainda.</p></div>);
+  if(eventos.length===0)return(<div className="px-4 py-16 text-center text-muted-foreground max-w-lg mx-auto w-full min-w-0 overflow-x-hidden"><RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-sm">Nenhuma atividade ainda.</p></div>);
   return (
-    <div className="max-w-2xl md:max-w-4xl mx-auto px-4 py-5">
+    <div className="max-w-2xl md:max-w-4xl mx-auto px-4 py-5 w-full min-w-0 overflow-x-hidden">
       {Object.entries(grupos).map(([data,evs])=>(
         <div key={data} className="mb-6">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">{data}</p>
@@ -1615,6 +2042,14 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
   const [editingCategoria, setEditingCategoria] = useState<string|null>(null);
   const [catEditNome, setCatEditNome] = useState("");
   const [pendentesAberto, setPendentesAberto] = useState(true);
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
+
+  function toggleUserExpand(id: string) {
+    setExpandedUsers(prev => ({
+      ...prev,
+      [id]: prev[id] === undefined ? false : !prev[id]
+    }));
+  }
 
   const pendentes=usuarios.filter(u=>u.status==="pendente");
   const aprovados=usuarios.filter(u=>u.status==="aprovado"&&!isAdminUser(u));
@@ -1728,25 +2163,96 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
           <div className="space-y-6">
             {pendentes.length>0&&(
               <div>
-                <button type="button" onClick={()=>setPendentesAberto(v=>!v)} className="w-full flex items-center justify-between gap-3 mb-3">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Aguardando aprovação ({pendentes.length})</p>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${pendentesAberto?"":"-rotate-90"}`}/>
+                <button type="button" onClick={()=>setPendentesAberto(v=>!v)} className="w-full flex items-center justify-between gap-3 mb-3 p-1 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Aguardando aprovação ({pendentes.length})</p>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">{pendentes.length} pendente{pendentes.length>1?"s":""}</span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${pendentesAberto?"rotate-0":"-rotate-90"}`}/>
                 </button>
                 {pendentesAberto&&(
                 <div className="space-y-3">
-                  {pendentes.map(u=>(
-                    <div key={u.id} className="bg-card border border-border rounded-xl p-4">
-                      <div className="min-w-0 mb-3"><p className="font-bold text-foreground break-words">{u.nome}</p><p className="text-xs text-muted-foreground capitalize break-words">{u.tipo} · {u.responsavel}</p></div>
-                      <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                        <p><MapPin className="w-3 h-3 inline mr-1"/>{u.endereco}</p>
-                        <p><ClipboardList className="w-3 h-3 inline mr-1"/>{u.cnpjCpf} · {u.email}</p>
+                  {pendentes.map(u=>{
+                    const isExpanded = expandedUsers[u.id] !== false; // expanded by default, clickable to minimize
+                    return (
+                      <div key={u.id} className="bg-card border border-border rounded-xl p-4 transition-all shadow-sm">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-foreground break-words text-sm">{u.nome}</p>
+                              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                {u.tipo}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground capitalize break-words mt-0.5">
+                              Responsável: <span className="font-medium text-foreground">{u.responsavel}</span>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleUserExpand(u.id)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1 text-xs flex-shrink-0"
+                            title={isExpanded ? "Minimizar informações" : "Expandir informações"}
+                          >
+                            <span className="text-[11px] text-muted-foreground font-medium hidden sm:inline">{isExpanded ? "Recolher" : "Expandir"}</span>
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="text-xs text-muted-foreground space-y-1.5 py-2.5 my-2.5 border-y border-border/60 bg-muted/20 px-3 rounded-lg">
+                            <p className="flex items-center gap-2 break-words">
+                              <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-primary mt-0.5"/>
+                              <span>{u.endereco}</span>
+                            </p>
+                            <p className="flex items-center gap-2 break-words">
+                              <ClipboardList className="w-3.5 h-3.5 flex-shrink-0 text-primary"/>
+                              <span>{u.documentoTipo ? u.documentoTipo.toUpperCase() : "Documento"}: {u.cnpjCpf}</span>
+                            </p>
+                            <p className="flex items-center gap-2 break-words">
+                              <Eye className="w-3.5 h-3.5 flex-shrink-0 text-primary"/>
+                              <span>{u.email}</span>
+                            </p>
+                            {u.whatsapp && (
+                              <p className="flex items-center gap-2 break-words">
+                                <Clock className="w-3.5 h-3.5 flex-shrink-0 text-primary"/>
+                                <span>WhatsApp: {u.whatsapp} · Horário: {u.horario}</span>
+                              </p>
+                            )}
+                            {u.alimentosInteresse && u.alimentosInteresse.length > 0 && (
+                              <div className="pt-1 flex flex-wrap gap-1 items-center">
+                                <span className="text-[10px] font-semibold text-foreground">Interesse:</span>
+                                {u.alimentosInteresse.map(aId => (
+                                  <span key={aId} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                                    {nomeAlimento(aId, alimentosBD)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2.5 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => onApprove(u.id)}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold bg-[#2F6B5E] text-white hover:bg-[#25564b] transition-colors shadow-sm active:scale-[0.98]"
+                          >
+                            <Check className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Aprovar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setModal({ type: "reject", targetId: u.id }); setReason(""); }}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold border border-[#E85D4E] text-[#E85D4E] bg-red-50/50 hover:bg-red-50 hover:border-red-400 transition-colors shadow-sm active:scale-[0.98]"
+                          >
+                            <X className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Não aprovar</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Btn size="sm" className="w-full" onClick={()=>onApprove(u.id)}><Check className="w-3.5 h-3.5"/>Aprovar</Btn>
-                        <Btn size="sm" variant="danger" className="w-full" onClick={()=>{setModal({type:"reject",targetId:u.id});setReason("");}}><X className="w-3.5 h-3.5"/>Recusar</Btn>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 )}
               </div>
@@ -1955,10 +2461,10 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
       {modal&&(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl p-5 w-full max-w-sm space-y-4">
-            <h3 className="font-bold text-foreground">{modal.type==="reject"?"Recusar cadastro":modal.type==="block"?"Bloquear usuário":modal.type==="remove-listing"?"Encerrar publicação":"Excluir usuário"}</h3>
+            <h3 className="font-bold text-foreground">{modal.type==="reject"?"Não aprovar cadastro":modal.type==="block"?"Bloquear usuário":modal.type==="remove-listing"?"Encerrar publicação":"Excluir usuário"}</h3>
             {(modal.type==="reject"||modal.type==="block")&&<Txa label="Motivo (opcional)" placeholder="Descreva o motivo..." rows={3} value={reason} onChange={e=>setReason(e.target.value)}/>}
             {(modal.type==="delete-user"||modal.type==="remove-listing")&&<p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita.</p>}
-            <div className="flex gap-2"><Btn variant="ghost" onClick={()=>setModal(null)}>Cancelar</Btn><Btn variant="danger" className="flex-1" onClick={execModal}>{modal.type==="reject"?"Recusar":modal.type==="block"?"Bloquear":"Confirmar"}</Btn></div>
+            <div className="flex gap-2"><Btn variant="ghost" onClick={()=>setModal(null)}>Cancelar</Btn><Btn variant="danger" className="flex-1" onClick={execModal}>{modal.type==="reject"?"Não aprovar":modal.type==="block"?"Bloquear":"Confirmar"}</Btn></div>
           </div>
         </div>
       )}
@@ -1992,7 +2498,7 @@ function PerfilView({ user, onLogout, onUpdatePerfil, onChangePassword, alimento
     onUpdatePerfil(form); setIsEditing(false);
   }
   return (
-    <div className="max-w-lg mx-auto px-4 py-5">
+    <div className="max-w-lg mx-auto px-4 py-5 w-full min-w-0 overflow-x-hidden">
       <div className="flex items-center gap-4 pb-5 border-b border-border">
         <label className="group relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white text-2xl font-black flex-shrink-0 bg-primary cursor-pointer ring-offset-2 focus-within:ring-2 focus-within:ring-primary" title="Alterar foto do perfil">
           <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>onUpdatePerfil({fotoUrl:String(reader.result)});reader.readAsDataURL(file);}}/>
@@ -2211,18 +2717,305 @@ export default function App() {
     else if(updates.status==="cancelado"){ showToast("Proposta cancelada."); }
   }
 
-  function handleAgendarEncontro(propostaId: string, data: string, horario: string, local: string) {
-    const novoE: Encontro = { id:genId(), propostaId, data, horario, local, criadoEm:new Date().toISOString(), alteracoes:[] };
-    setEncontros(p=>[...p,novoE]);
-    setPropostas(p=>p.map(x=>x.id===propostaId?{...x,status:"encontro-agendado"}:x));
-    const p=propostas.find(x=>x.id===propostaId);
-    if(p){ const rootId=p.propostaPaiId??p.id; setMensagens(prev=>[...prev,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:`Encontro agendado: ${new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})} às ${horario} — ${local}.`,criadaEm:new Date().toISOString(),lida:false}]); }
-    showToast("Encontro registrado.");
+  function handleProporEncontro(propostaId: string, data: string, horario: string, local: string) {
+    if(!user) return;
+    const p = propostas.find(x=>x.id===propostaId);
+    const rootId = p?.propostaPaiId ?? propostaId;
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    const destinatarioId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
+
+    const existing = encontros.find(e => e.propostaId === propostaId && (e.status === "proposto" || e.status === "recusado"));
+    const encounterId = existing ? existing.id : genId();
+
+    if(existing) {
+      setEncontros(prev => prev.map(e => e.id === existing.id ? {
+        ...e,
+        data,
+        horario,
+        local,
+        status: "proposto",
+        propostoPorId: user.id,
+        alteracoes: [...e.alteracoes, { campo: "proposta", de: `${e.data} ${e.horario}`, para: `${data} ${horario}`, em: new Date().toISOString() }]
+      } : e));
+    } else {
+      const novoE: Encontro = {
+        id: encounterId,
+        propostaId,
+        data,
+        horario,
+        local,
+        criadoEm: new Date().toISOString(),
+        alteracoes: [],
+        status: "proposto",
+        propostoPorId: user.id
+      };
+      setEncontros(prev => [...prev, novoE]);
+    }
+
+    const dataFmt = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    setMensagens(prev => [...prev, {
+      id: genId(),
+      rootPropostaId: rootId,
+      autorId: "sistema",
+      tipo: "sistema",
+      texto: `${user.nome} propôs um encontro para ${dataFmt} às ${horario} em ${local}. Aguardando confirmação da outra parte.`,
+      criadaEm: new Date().toISOString(),
+      lida: false
+    }]);
+
+    if(destinatarioId) {
+      setNotificacoes(prev => [...prev, {
+        id: genId(),
+        usuarioId: destinatarioId,
+        mensagem: `${user.nome} enviou uma proposta de encontro para ${dataFmt} às ${horario}.`,
+        lida: false,
+        criadaEm: new Date().toISOString(),
+        listagemId: l?.id,
+        propostaId
+      }]);
+    }
+
+    if (supabase) {
+      void supabase.from("meetings").upsert({
+        id: encounterId,
+        proposal_id: propostaId,
+        meeting_date: data,
+        meeting_time: horario,
+        location: local,
+        status: "proposto",
+        proposed_by: user.id,
+      });
+      void supabase.from("messages").insert({
+        proposal_id: rootId,
+        author_id: user.id,
+        kind: "sistema",
+        content: `${user.nome} propôs um encontro para ${dataFmt} às ${horario} em ${local}. Aguardando confirmação.`,
+      });
+    }
+
+    showToast("Proposta de encontro enviada.");
   }
 
-  function handleEditEncontro(eId: string, data: string, horario: string, local: string) {
-    setEncontros(p=>p.map(e=>{ if(e.id!==eId)return e; const alts=[...e.alteracoes]; if(e.data!==data)alts.push({campo:"data",de:e.data,para:data,em:new Date().toISOString()}); if(e.horario!==horario)alts.push({campo:"horario",de:e.horario,para:horario,em:new Date().toISOString()}); if(e.local!==local)alts.push({campo:"local",de:e.local,para:local,em:new Date().toISOString()}); return {...e,data,horario,local,alteracoes:alts}; }));
-    showToast("Encontro atualizado.");
+  function handleAceitarEncontro(encontroId: string) {
+    if(!user) return;
+    const e = encontros.find(x => x.id === encontroId);
+    if(!e) return;
+    const p = propostas.find(x => x.id === e.propostaId);
+    const rootId = p?.propostaPaiId ?? e.propostaId;
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
+
+    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "aceito" } : x));
+    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "encontro-agendado" } : x));
+
+    const dataFmt = new Date(e.data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    setMensagens(prev => [...prev, {
+      id: genId(),
+      rootPropostaId: rootId,
+      autorId: "sistema",
+      tipo: "sistema",
+      texto: `Encontro confirmado por ambas as partes: ${dataFmt} às ${e.horario} — ${e.local}.`,
+      criadaEm: new Date().toISOString(),
+      lida: false
+    }]);
+
+    if(outroId) {
+      setNotificacoes(prev => [...prev, {
+        id: genId(),
+        usuarioId: outroId,
+        mensagem: `${user.nome} aceitou a proposta de encontro para ${dataFmt} às ${e.horario}!`,
+        lida: false,
+        criadaEm: new Date().toISOString(),
+        listagemId: l?.id,
+        propostaId: e.propostaId
+      }]);
+    }
+
+    if(supabase) {
+      void supabase.from("meetings").update({ status: "aceito" }).eq("id", encontroId);
+      void supabase.from("proposals").update({ status: "encontro-agendado" }).eq("id", e.propostaId);
+      void supabase.from("messages").insert({
+        proposal_id: rootId,
+        author_id: user.id,
+        kind: "sistema",
+        content: `Encontro confirmado por ambas as partes: ${dataFmt} às ${e.horario} — ${e.local}.`,
+      });
+    }
+
+    showToast("Encontro confirmado por ambas as partes!");
+  }
+
+  function handleContrapropostaEncontro(encontroId: string, data: string, horario: string, local: string) {
+    if(!user) return;
+    const e = encontros.find(x => x.id === encontroId);
+    if(!e) return;
+    const p = propostas.find(x => x.id === e.propostaId);
+    const rootId = p?.propostaPaiId ?? e.propostaId;
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
+
+    const alts = [...e.alteracoes, {
+      campo: "contraproposta",
+      de: `${e.data} ${e.horario} (${e.local})`,
+      para: `${data} ${horario} (${local})`,
+      em: new Date().toISOString()
+    }];
+
+    setEncontros(prev => prev.map(x => x.id === encontroId ? {
+      ...x,
+      data,
+      horario,
+      local,
+      status: "proposto",
+      propostoPorId: user.id,
+      alteracoes: alts
+    } : x));
+
+    // Notice: keeps status in negotiation until new date is accepted
+    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
+
+    const dataFmt = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    setMensagens(prev => [...prev, {
+      id: genId(),
+      rootPropostaId: rootId,
+      autorId: "sistema",
+      tipo: "sistema",
+      texto: `${user.nome} enviou uma contraproposta de encontro: ${dataFmt} às ${horario} em ${local}. Aguardando resposta.`,
+      criadaEm: new Date().toISOString(),
+      lida: false
+    }]);
+
+    if(outroId) {
+      setNotificacoes(prev => [...prev, {
+        id: genId(),
+        usuarioId: outroId,
+        mensagem: `${user.nome} enviou uma contraproposta de encontro para ${dataFmt} às ${horario}.`,
+        lida: false,
+        criadaEm: new Date().toISOString(),
+        listagemId: l?.id,
+        propostaId: e.propostaId
+      }]);
+    }
+
+    if(supabase) {
+      void supabase.from("meetings").update({
+        meeting_date: data,
+        meeting_time: horario,
+        location: local,
+        status: "proposto",
+        proposed_by: user.id,
+        changes: alts
+      }).eq("id", encontroId);
+      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
+      void supabase.from("messages").insert({
+        proposal_id: rootId,
+        author_id: user.id,
+        kind: "sistema",
+        content: `${user.nome} sugeriu nova data/local para o encontro: ${dataFmt} às ${horario} em ${local}.`,
+      });
+    }
+
+    showToast("Contraproposta de encontro enviada.");
+  }
+
+  function handleRecusarEncontro(encontroId: string) {
+    if(!user) return;
+    const e = encontros.find(x => x.id === encontroId);
+    if(!e) return;
+    const p = propostas.find(x => x.id === e.propostaId);
+    const rootId = p?.propostaPaiId ?? e.propostaId;
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
+
+    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "recusado" } : x));
+    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
+
+    setMensagens(prev => [...prev, {
+      id: genId(),
+      rootPropostaId: rootId,
+      autorId: "sistema",
+      tipo: "sistema",
+      texto: `${user.nome} não aceitou a data/local proposta para o encontro. Uma nova data pode ser combinada.`,
+      criadaEm: new Date().toISOString(),
+      lida: false
+    }]);
+
+    if(outroId) {
+      setNotificacoes(prev => [...prev, {
+        id: genId(),
+        usuarioId: outroId,
+        mensagem: `${user.nome} não aceitou a proposta de encontro. Você pode sugerir uma nova data.`,
+        lida: false,
+        criadaEm: new Date().toISOString(),
+        listagemId: l?.id,
+        propostaId: e.propostaId
+      }]);
+    }
+
+    if(supabase) {
+      void supabase.from("meetings").update({ status: "recusado" }).eq("id", encontroId);
+      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
+      void supabase.from("messages").insert({
+        proposal_id: rootId,
+        author_id: user.id,
+        kind: "sistema",
+        content: `${user.nome} recusou a proposta de encontro.`,
+      });
+    }
+
+    showToast("Proposta de encontro recusada.");
+  }
+
+  function handleCancelarEncontro(encontroId: string) {
+    if(!user) return;
+    const e = encontros.find(x => x.id === encontroId);
+    if(!e) return;
+    const p = propostas.find(x => x.id === e.propostaId);
+    const rootId = p?.propostaPaiId ?? e.propostaId;
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
+
+    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "cancelado" } : x));
+    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
+
+    setMensagens(prev => [...prev, {
+      id: genId(),
+      rootPropostaId: rootId,
+      autorId: "sistema",
+      tipo: "sistema",
+      texto: `${user.nome} cancelou o agendamento do encontro.`,
+      criadaEm: new Date().toISOString(),
+      lida: false
+    }]);
+
+    if(outroId) {
+      setNotificacoes(prev => [...prev, {
+        id: genId(),
+        usuarioId: outroId,
+        mensagem: `${user.nome} cancelou o agendamento do encontro.`,
+        lida: false,
+        criadaEm: new Date().toISOString(),
+        listagemId: l?.id,
+        propostaId: e.propostaId
+      }]);
+    }
+
+    if(supabase) {
+      void supabase.from("meetings").update({ status: "cancelado" }).eq("id", encontroId);
+      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
+      void supabase.from("messages").insert({
+        proposal_id: rootId,
+        author_id: user.id,
+        kind: "sistema",
+        content: `${user.nome} cancelou o agendamento do encontro.`,
+      });
+    }
+
+    showToast("Encontro cancelado.");
+  }
+
+  function handleAgendarEncontro(propostaId: string, data: string, horario: string, local: string) {
+    handleProporEncontro(propostaId, data, horario, local);
   }
 
   function handleRegistrarConfirmacao(propostaId: string, resposta: "aconteceu"|"nao-aconteceu", pesoG?: number) {
@@ -2323,12 +3116,12 @@ export default function App() {
     switch(view) {
       case "dashboard": return <DashboardView user={user!} listagens={listagens} propostas={propostas} usuarios={usuarios} encontros={encontros} pendingConfirmationId={pendingConfirmationId} alimentosBD={alimentosBD} setView={setView} navTo={navTo}/>;
       case "listagens": return <ListagensView listagens={listagens} usuarios={usuarios} alimentosBD={alimentosBD} categorias={categorias} navTo={navTo}/>;
-      case "detalhes": return selectedId ? <DetalhesView listagemId={selectedId} listagens={listagens} propostas={propostas} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} ocorrencias={ocorrencias} onBack={()=>setView(fromView)} onAddProposta={handleAddProposta} onUpdateListagem={handleUpdateListagem} onUpdateProposta={handleUpdateProposta} onRegistrarConfirmacao={handleRegistrarConfirmacao} onAgendarEncontro={handleAgendarEncontro} onEditEncontro={handleEditEncontro} onEditListagem={handleEditListagem} onEncerrarListagem={handleEncerrarListagem} onReportarProblema={handleReportarProblema} onOpenChat={handleOpenChat}/> : null;
+      case "detalhes": return selectedId ? <DetalhesView listagemId={selectedId} listagens={listagens} propostas={propostas} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} ocorrencias={ocorrencias} onBack={()=>setView(fromView)} onAddProposta={handleAddProposta} onUpdateListagem={handleUpdateListagem} onUpdateProposta={handleUpdateProposta} onRegistrarConfirmacao={handleRegistrarConfirmacao} onAgendarEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onEditListagem={handleEditListagem} onEncerrarListagem={handleEncerrarListagem} onReportarProblema={handleReportarProblema} onOpenChat={handleOpenChat}/> : null;
       case "nova-listagem": return <NovaListagemView onSubmit={handleAddListagem} onBack={()=>setView("listagens")} alimentosBD={alimentosBD} categorias={categorias}/>;
       case "minhas-trocas": return <MinhasTrocasView user={user!} listagens={listagens} propostas={propostas} usuarios={usuarios} encontros={encontros} alimentosBD={alimentosBD} navTo={navTo}/>;
       case "admin": return isAdminUser(user!) ? <AdminView tab={adminTab} setTab={setAdminTab} usuarios={usuarios} listagens={listagens} propostas={propostas} encontros={encontros} ocorrencias={ocorrencias} alimentosBD={alimentosBD} categorias={categorias} onApprove={handleApprove} onRejectWithReason={handleRejectWithReason} onBlock={handleBlock} onUnblock={handleUnblock} onDeleteUser={handleDeleteUser} onRemoveListing={handleRemoveListing} onAddAlimento={handleAddAlimento} onEditAlimento={handleEditAlimento} onToggleAlimento={handleToggleAlimento} onAddCategoria={handleAddCategoria} onEditCategoria={handleEditCategoria} onToggleCategoria={handleToggleCategoria}/> : null;
       case "perfil": return <PerfilView user={user!} onLogout={handleLogout} onUpdatePerfil={handleUpdatePerfil} onChangePassword={handleChangePassword} alimentosBD={alimentosBD}/>;
-      case "chat": return chatPropostaId ? <ChatView rootPropostaId={chatPropostaId} mensagens={mensagens} propostas={propostas} listagens={listagens} usuarios={usuarios} user={user!} alimentosBD={alimentosBD} onSend={handleSendMensagem} onBack={()=>setView(fromView||"detalhes")}/> : null;
+      case "chat": return chatPropostaId ? <ChatView rootPropostaId={chatPropostaId} mensagens={mensagens} propostas={propostas} listagens={listagens} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} onSend={handleSendMensagem} onProporEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onBack={()=>setView(fromView||"detalhes")}/> : null;
       default: return null;
     }
   }

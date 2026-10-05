@@ -27,7 +27,7 @@ Confirme que a consulta alterou exatamente uma linha. Depois entre novamente no 
 
 ### Aplicação
 
-Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no `.env.local` local e no ambiente do deploy. Use somente uma chave pública anon/publishable no frontend; nunca use a `service_role` nessas variáveis. Se a confirmação de e-mail estiver habilitada no Supabase Auth, a pessoa precisa confirmar o endereço antes de entrar.
+Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env.local` local e no ambiente do deploy. O app também aceita `VITE_SUPABASE_ANON_KEY` para projetos que ainda usam a chave pública legada. Nunca use a `service_role` no frontend. Se a confirmação de e-mail estiver habilitada no Supabase Auth, a pessoa precisa confirmar o endereço antes de entrar.
 
 O catálogo inicial contém somente categorias e alimentos de referência; não cria usuários, publicações, propostas ou conversas de demonstração. Fotos de publicação são JPEGs no bucket `listing-photos`; o banco armazena a URL pública do arquivo. A view de diretório respeita o RLS e não expõe documentos pessoais; a listagem completa fica restrita à função administrativa.
 

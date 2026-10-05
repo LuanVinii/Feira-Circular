@@ -9,11 +9,12 @@ import {
   Info, RefreshCw, AlertCircle, ClipboardList,
   Ban, Trash2, Users, Activity, ShoppingBasket,
   AlertTriangle, ThumbsUp, ThumbsDown,
-  Pencil, CalendarCheck, Flag, UtensilsCrossed,
+  Pencil, CalendarCheck, Flag, UtensilsCrossed, ImagePlus,
 } from "lucide-react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase";
 import { fetchCatalog, fetchPlatformState, fetchProfileById, type PlatformState } from "../lib/platform";
+import { isValidCpf, isValidCnpj } from "../lib/documentRules.mjs";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -159,12 +160,13 @@ function fmtQtd(g: number): string {
 }
 
 function maskCPF(v: string): string { const d = v.replace(/\D/g,"").slice(0,11); if(d.length<=3)return d; if(d.length<=6)return `${d.slice(0,3)}.${d.slice(3)}`; if(d.length<=9)return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`; return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`; }
-function maskCNPJ(v: string): string { const d = v.replace(/\D/g,"").slice(0,14); if(d.length<=2)return d; if(d.length<=5)return `${d.slice(0,2)}.${d.slice(2)}`; if(d.length<=8)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`; if(d.length<=12)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`; return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`; }
+function maskCNPJ(v: string): string { const d = v.replace(/[^a-z0-9]/gi,"").toUpperCase().slice(0,14); if(d.length<=2)return d; if(d.length<=5)return `${d.slice(0,2)}.${d.slice(2)}`; if(d.length<=8)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`; if(d.length<=12)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`; return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`; }
 function maskPhone(v: string): string { const d = v.replace(/\D/g,"").slice(0,11); if(d.length<=2)return d.length===0?d:`(${d}`; if(d.length<=6)return `(${d.slice(0,2)}) ${d.slice(2)}`; if(d.length<=10)return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; }
 
 function buildChain(propostas: Proposta[]): Proposta[] {
   const chain: Proposta[] = [];
-  let cur: Proposta | undefined = propostas.find(p => !p.propostaPaiId);
+  let cur: Proposta | undefined = propostas.filter(p => !p.propostaPaiId)
+    .sort((a,b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())[0];
   while (cur) { chain.push(cur); cur = propostas.find(p => p.propostaPaiId === cur!.id); }
   return chain;
 }
@@ -203,7 +205,10 @@ function getPendingConfirmation(userId: string, propostas: Proposta[], listagens
 type Errors = Record<string, string>;
 function validateNome(v: string, min=3, max=100): string|null { if(!v.trim())return "Campo obrigatório."; if(v.trim().length<min)return `Mínimo ${min} caracteres.`; if(v.trim().length>max)return `Máximo ${max} caracteres.`; return null; }
 function validateEmail(v: string): string|null { if(!v.trim())return "Campo obrigatório."; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()))return "Informe um e-mail válido."; return null; }
-function validateCNPJCPF(v: string, documentoTipo: TipoDocumento): string|null { const d=v.replace(/\D/g,""); if(documentoTipo==="cpf"&&d.length!==11)return "Informe um CPF válido (11 dígitos)."; if(documentoTipo==="cnpj"&&d.length!==14)return "Informe um CNPJ válido (14 dígitos)."; return null; }
+function validateCNPJCPF(v: string, documentoTipo: TipoDocumento): string|null {
+  if (documentoTipo === "cpf") return isValidCpf(v) ? null : "Informe um CPF válido (11 dígitos).";
+  return isValidCnpj(v) ? null : "Informe um CNPJ válido com 14 caracteres.";
+}
 function validatePhone(v: string): string|null { const d=v.replace(/\D/g,""); if(d.length<10||d.length>11)return "Informe um telefone com DDD."; return null; }
 function validateQtd(v: string): string|null { const n=parseFloat(v); if(!v||isNaN(n))return "Informe uma quantidade válida."; if(n<=0)return "A quantidade deve ser maior que zero."; return null; }
 
@@ -659,7 +664,9 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
     if(form.senha!==form.confirmaSenha)e.confirmaSenha="As senhas não conferem.";
     const enErr=validateNome(form.endereco,5,200); if(enErr)e.endereco=enErr;
     const tErr=validatePhone(form.whatsapp); if(tErr)e.whatsapp=tErr;
-    if(!form.horario)e.horario="Selecione o horário.";
+    if(!form.abre)e.abre="Informe o horario de abertura.";
+    if(!form.fecha)e.fecha="Informe o horario de fechamento.";
+    if(form.abre && form.fecha && form.fecha <= form.abre)e.fecha="O fechamento deve ser depois da abertura.";
     setErrors(e); return Object.keys(e).length===0;
   }
 
@@ -750,7 +757,7 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
     return !!e && (e.status==="aceito" || !e.status) && !isDiaEncontroPassado(e);
   });
   const oportunidades = listagens
-    .filter(l => l.status === "ativa" && l.tipo === "oferta" && l.usuarioId !== user.id && user.alimentosInteresse.includes(l.alimento))
+    .filter(l => l.status === "ativa" && l.prazo >= TODAY && l.tipo === "oferta" && l.usuarioId !== user.id && user.alimentosInteresse.includes(l.alimento))
     .sort((a,b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
     .slice(0, 3);
 
@@ -932,7 +939,7 @@ function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo }: 
 // ─── NOVA LISTAGEM ─────────────────────────────────────────────────────────────
 
 function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
-  onSubmit: (l: Partial<Listagem>)=>void; onBack: ()=>void;
+  onSubmit: (l: Partial<Listagem>)=>void | Promise<void>; onBack: ()=>void;
   alimentosBD: AlimentoBD[]; categorias: CategoriaAlimento[];
 }) {
   const [step, setStep] = useState(1);
@@ -948,13 +955,17 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
     if(!form.prazo)e.prazo="Informe a data de validade da publicação.";
     setErrors(e); return Object.keys(e).length===0;
   }
-  function submit() {
+  async function submit() {
     const e: Errors = {};
     if(!form.fotoUrl)e.foto="A foto do lote é obrigatória.";
     if(form.observacao.length>140)e.observacao="Máximo 140 caracteres.";
     setErrors(e); if(Object.keys(e).length>0)return;
     const alim = alimentosBD.find(a=>a.id===form.alimento);
-    onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:form.fotoUrl || alim?.imagemUrl || null, status:"ativa" });
+    try {
+      await onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:form.fotoUrl || alim?.imagemUrl || null, status:"ativa" });
+    } catch {
+      setErrors(current => ({ ...current, foto: "N?o foi poss?vel publicar. Confira sua conex?o e tente novamente." }));
+    }
   }
 
   return (
@@ -1006,7 +1017,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
           <div>
             <p className="text-sm font-semibold text-foreground mb-1.5">Foto do lote *</p>
             <label className={`block w-full border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-colors ${form.fotoUrl?"border-primary bg-primary/5":errors.foto?"border-[#E85D4E]":"border-border"}`}>
-              <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{setForm(f=>({...f,fotoUrl:String(reader.result)}));setErrors(er=>{const n={...er};delete n.foto;return n;});};reader.readAsDataURL(file);}}/>
+              <input type="file" accept="image/*" className="sr-only" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const scale=Math.min(1,1200/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext("2d")?.drawImage(img,0,0,canvas.width,canvas.height);setForm(f=>({...f,fotoUrl:canvas.toDataURL("image/jpeg",0.78)}));setErrors(er=>{const n={...er};delete n.foto;return n;});};img.onerror=()=>setErrors(er=>({...er,foto:"N?o foi poss?vel ler esta imagem."}));img.src=String(reader.result);};reader.onerror=()=>setErrors(er=>({...er,foto:"N?o foi poss?vel ler esta imagem."}));reader.readAsDataURL(file);}}/>
               {form.fotoUrl?<img src={form.fotoUrl} alt="Pré-visualização do lote" className="h-40 w-full rounded-lg object-cover"/>:<div className="py-5"><ImagePlus className="w-8 h-8 text-muted-foreground mx-auto mb-2"/><p className="text-sm text-muted-foreground">Toque para escolher uma foto</p></div>}
             </label>
             {errors.foto&&<p className="text-xs text-[#E85D4E] mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/>{errors.foto}</p>}
@@ -1030,8 +1041,8 @@ function ChatView({
   rootPropostaId: string; mensagens: Mensagem[]; propostas: Proposta[];
   listagens: Listagem[]; usuarios: Usuario[]; user: Usuario;
   encontros: Encontro[]; alimentosBD: AlimentoBD[];
-  onSend: (texto: string)=>void;
-  onProporEncontro: (propostaId: string, data: string, horario: string, local: string)=>void;
+  onSend: (texto: string)=>void | Promise<void>;
+  onProporEncontro: (propostaId: string, data: string, horario: string, local: string)=>void | Promise<void>;
   onAceitarEncontro: (encontroId: string)=>void;
   onRecusarEncontro: (encontroId: string)=>void;
   onContrapropostaEncontro: (encontroId: string, data: string, horario: string, local: string)=>void;
@@ -1039,6 +1050,7 @@ function ChatView({
   onBack: ()=>void;
 }) {
   const [input, setInput] = useState("");
+  const [sendError, setSendError] = useState("");
   const [showAgendarModal, setShowAgendarModal] = useState(false);
   const [agModalModo, setAgModalModo] = useState<"propor"|"contraproposta">("propor");
   const [alvoEncontroId, setAlvoEncontroId] = useState<string|null>(null);
@@ -1071,9 +1083,10 @@ function ChatView({
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [timeline.length]);
 
-  function sendMsg() {
+  async function sendMsg() {
     const t = input.trim(); if(!t) return;
-    onSend(t); setInput("");
+    try { await onSend(t); setInput(""); setSendError(""); }
+    catch { setSendError("Nao foi possivel enviar a mensagem. Tente novamente."); }
   }
 
   function abrirProporEncontro() {
@@ -1092,7 +1105,7 @@ function ChatView({
     setShowAgendarModal(true);
   }
 
-  function submitAgendar() {
+  async function submitAgendar() {
     const errs: Errors = {};
     if (!agForm.data) errs.data = "Informe a data do encontro.";
     if (!agForm.horario) errs.horario = "Informe o horário.";
@@ -1100,13 +1113,15 @@ function ChatView({
     setAgErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    if (agModalModo === "contraproposta" && alvoEncontroId) {
-      onContrapropostaEncontro(alvoEncontroId, agForm.data, agForm.horario, agForm.local.trim());
-    } else {
-      const targetPropId = chain[chain.length - 1]?.id ?? rootPropostaId;
-      onProporEncontro(targetPropId, agForm.data, agForm.horario, agForm.local.trim());
-    }
-    setShowAgendarModal(false);
+    try {
+      if (agModalModo === "contraproposta" && alvoEncontroId) {
+        await onContrapropostaEncontro(alvoEncontroId, agForm.data, agForm.horario, agForm.local.trim());
+      } else {
+        const targetPropId = chain[chain.length - 1]?.id ?? rootPropostaId;
+        await onProporEncontro(targetPropId, agForm.data, agForm.horario, agForm.local.trim());
+      }
+      setShowAgendarModal(false);
+    } catch { setAgErrors(current=>({...current,data:"Nao foi possivel salvar os dados do encontro. Tente novamente."})); }
   }
 
   const contraparte = proposta?.proponenteId === user.id
@@ -1363,6 +1378,7 @@ function ChatView({
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-border bg-background flex-shrink-0">
+        {sendError && <p role="alert" className="text-xs text-[#E85D4E] mb-2">{sendError}</p>}
         <div className="flex gap-2 items-end">
           <textarea
             value={input}
@@ -1457,10 +1473,10 @@ function DetalhesView({
 }: {
   listagemId: string; listagens: Listagem[]; propostas: Proposta[]; usuarios: Usuario[];
   user: Usuario; encontros: Encontro[]; alimentosBD: AlimentoBD[]; ocorrencias: OcorrenciaPos[];
-  onBack: ()=>void; onAddProposta: (p: Partial<Proposta>)=>void;
+  onBack: ()=>void; onAddProposta: (p: Partial<Proposta>)=>void | Promise<void>;
   onUpdateListagem: (id: string, status: StatusListagem)=>void;
   onUpdateProposta: (id: string, u: Partial<Proposta>)=>void;
-  onRegistrarConfirmacao: (propostaId: string, r: "aconteceu"|"nao-aconteceu", pesoG?: number)=>void;
+  onRegistrarConfirmacao: (propostaId: string, r: "aconteceu"|"nao-aconteceu", pesoG?: number)=>void | Promise<void>;
   onAgendarEncontro: (propostaId: string, data: string, horario: string, local: string)=>void;
   onAceitarEncontro: (encontroId: string)=>void;
   onRecusarEncontro: (encontroId: string)=>void;
@@ -1468,7 +1484,7 @@ function DetalhesView({
   onCancelarEncontro: (encontroId: string)=>void;
   onEditListagem: (id: string, u: Partial<Listagem>)=>void;
   onEncerrarListagem: (id: string)=>void;
-  onReportarProblema: (propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string)=>void;
+  onReportarProblema: (propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string)=>void | Promise<void>;
   onOpenChat: (rootPropostaId: string)=>void;
 }) {
   const listagem = listagens.find(l => l.id === listagemId);
@@ -1498,6 +1514,7 @@ function DetalhesView({
   if (!listagem) return <div className="p-6 text-sm text-muted-foreground">Publicação não encontrada.</div>;
 
   const dono = usuarios.find(u => u.id === listagem.usuarioId);
+  const publicacaoVencida = listagem.prazo < TODAY;
   const euDono = user.id === listagem.usuarioId;
   const todasP = propostas.filter(p => p.listagemId === listagemId);
   const cadeia = buildChain(todasP);
@@ -1523,24 +1540,29 @@ function DetalhesView({
 
   const cats = [...new Set(alimentosBD.filter(a=>a.ativo).map(a=>a.categoriaId))];
 
-  function submitProposta() {
+  async function submitProposta() {
     const e: Errors = {};
     if(pForm.modo!=="equivalente"&&!pForm.alimento)e.alimento="Selecione um alimento.";
     const quantidadeG=pForm.modo==="equivalente"?listagem.quantidadeG:toGrams(Number(pForm.quantidade),pForm.unidade);
     if(pForm.modo!=="equivalente"){const qErr=validateQtd(pForm.quantidade);if(qErr)e.quantidade=qErr;if(quantidadeG>listagem.quantidadeG*1.2)e.quantidade="A quantidade pode ser no máximo 20% maior que a publicação.";}
     if(pForm.modo!=="equivalente"&&!pForm.maturacao)e.maturacao="Selecione a maturação.";
     setPErrors(e); if(Object.keys(e).length>0)return;
-    const pai=cadeia.length>0?ultima.id:null;
-    onAddProposta({ listagemId, propostaPaiId:pai, versao:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.modo==="equivalente"?listagem.alimento:pForm.alimento,quantidadeG,maturacao:pForm.modo==="equivalente"?listagem.maturacao:pForm.maturacao as Maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG:listagem.quantidadeG,maturacao:listagem.maturacao,observacao:null} });
-    setShowPForm(false); setPForm({modo:"equivalente",alimento:"",quantidade:"",unidade:"kg",maturacao:"",observacao:""});
+    const negociacaoEncerrada = cadeia.length > 0 && cadeia.every(p=>p.status==="cancelado");
+    const pai=negociacaoEncerrada?null:(cadeia.length>0?ultima.id:null);
+    try {
+      await onAddProposta({ listagemId, propostaPaiId:pai, versao:negociacaoEncerrada?1:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.modo==="equivalente"?listagem.alimento:pForm.alimento,quantidadeG,maturacao:pForm.modo==="equivalente"?listagem.maturacao:pForm.maturacao as Maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG:listagem.quantidadeG,maturacao:listagem.maturacao,observacao:null} });
+      setShowPForm(false); setPForm({modo:"equivalente",alimento:"",quantidade:"",unidade:"kg",maturacao:"",observacao:""});
+    } catch {
+      setPErrors({ quantidade: "N?o foi poss?vel salvar a proposta. Tente novamente." });
+    }
   }
 
-  function submitAgendamento() {
+  async function submitAgendamento() {
     const e: Errors = {};
     if(!agForm.data)e.data="Informe a data."; if(!agForm.horario)e.horario="Informe o horário."; if(!agForm.local.trim())e.local="Informe o local.";
     setAgErrors(e); if(Object.keys(e).length>0)return;
-    onAgendarEncontro(ultima!.id,agForm.data,agForm.horario,agForm.local.trim());
-    setShowAgForm(false); setAgForm({data:"",horario:"",local:""});
+    try { await onAgendarEncontro(ultima!.id,agForm.data,agForm.horario,agForm.local.trim()); setShowAgForm(false); setAgForm({data:"",horario:"",local:""}); }
+    catch { setAgErrors(current=>({...current,data:"Nao foi possivel salvar os dados do encontro. Tente novamente."})); }
   }
 
   function submitEditEncontro() {
@@ -1558,20 +1580,26 @@ function DetalhesView({
     setShowElForm(false);
   }
 
-  function submitConfirm() {
+  async function submitConfirm() {
     if(!confirmResposta)return;
     if(confirmResposta==="aconteceu"&&(!checkEmbalagem||!checkContaminacao))return;
     const peso=confirmResposta==="aconteceu"&&pesoInput?pesoG:undefined;
-    onRegistrarConfirmacao(ultima!.id,confirmResposta,peso);
-    setShowConfirmModal(false); setConfirmResposta(""); setPesoInput(""); setCheckEmbalagem(false); setCheckContaminacao(false);
+    try {
+      await onRegistrarConfirmacao(ultima!.id,confirmResposta,peso);
+      setShowConfirmModal(false); setConfirmResposta(""); setPesoInput(""); setCheckEmbalagem(false); setCheckContaminacao(false);
+    } catch {
+      setReportErrors({ descricao: "N?o foi poss?vel salvar sua confirma??o. Tente novamente." });
+    }
   }
 
-  function submitReport() {
+  async function submitReport() {
     const e: Errors = {};
     if(!reportForm.descricao.trim())e.descricao="Descreva o problema.";
     setReportErrors(e); if(Object.keys(e).length>0)return;
-    onReportarProblema(ultima!.id, listagemId, reportForm.tipo, reportForm.descricao.trim());
-    setShowReportForm(false); setReportForm({tipo:"qualidade",descricao:""});
+    try {
+      await onReportarProblema(ultima!.id, listagemId, reportForm.tipo, reportForm.descricao.trim());
+      setShowReportForm(false); setReportForm({tipo:"qualidade",descricao:""});
+    } catch { setReportErrors(current=>({...current,descricao:"Nao foi possivel enviar o relato. Tente novamente."})); }
   }
 
   function displayLabel(p: Proposta): string {
@@ -1809,6 +1837,8 @@ function DetalhesView({
           </div>
         )}
 
+        {publicacaoVencida && listagem.status === "ativa" && <p className="text-sm text-muted-foreground">Esta publicacao venceu e nao esta mais aceitando propostas.</p>}
+
         {/* Proposal chain */}
         {cadeia.length > 0 && (
           <div>
@@ -1856,7 +1886,7 @@ function DetalhesView({
                       {p.status==="nao-compareceu"&&<div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2 mb-2"><X className="w-3.5 h-3.5"/>Encontro não realizado.</div>}
                       {p.status==="divergencia"&&<div className="flex items-center gap-2 text-xs text-[#E85D4E] bg-red-50 rounded-lg px-3 py-2 mb-2"><AlertTriangle className="w-3.5 h-3.5"/>Respostas divergentes. Em análise pelo administrador.</div>}
                       <div className="flex flex-wrap gap-2">
-                        {canAct&&<><Btn size="sm" onClick={()=>{ onUpdateProposta(p.id,{status:"aceito"}); onUpdateListagem(listagemId,"em-negociacao"); }}><Check className="w-3.5 h-3.5"/>Aceitar</Btn><Btn size="sm" variant="outline" onClick={()=>setShowPForm(true)}>Contrapropor</Btn><Btn size="sm" variant="ghost" className="text-muted-foreground" onClick={()=>onUpdateProposta(p.id,{status:"cancelado"})}>Recusar</Btn></>}
+                        {canAct&&<><Btn size="sm" onClick={()=>{ void onUpdateProposta(p.id,{status:"aceito"}); }}><Check className="w-3.5 h-3.5"/>Aceitar</Btn><Btn size="sm" variant="outline" onClick={()=>setShowPForm(true)}>Contrapropor</Btn><Btn size="sm" variant="ghost" className="text-muted-foreground" onClick={()=>onUpdateProposta(p.id,{status:"cancelado"})}>Recusar</Btn></>}
                         {canSched&&<Btn size="sm" variant="secondary" onClick={()=>setShowAgForm(true)}><CalendarCheck className="w-3.5 h-3.5"/>Propor encontro</Btn>}
                       </div>
                     </div>
@@ -1868,7 +1898,7 @@ function DetalhesView({
         )}
 
         {/* Proposal form */}
-        {!euDono && (cadeia.length===0||showPForm) && listagem.status==="ativa" && (
+        {!euDono && (cadeia.length===0||showPForm||cadeia.every(p=>p.status==="cancelado")) && listagem.status==="ativa" && !publicacaoVencida && (
           showPForm ? (
             <div className="border border-border rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between"><p className="font-bold text-foreground">{cadeia.length>0?"Contraproposta":"Proposta de troca"}</p><button onClick={()=>setShowPForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
@@ -2093,8 +2123,8 @@ function AdminView({ tab, setTab, usuarios, listagens, propostas, encontros, oco
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Situação atual</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  {label:"Ofertas ativas",val:listagens.filter(l=>l.tipo==="oferta"&&l.status==="ativa").length,cor:"#2F6B5E"},
-                  {label:"Pedidos ativos",val:listagens.filter(l=>l.tipo==="pedido"&&l.status==="ativa").length,cor:"#B87A00"},
+                  {label:"Ofertas ativas",val:listagens.filter(l=>l.tipo==="oferta"&&l.status==="ativa"&&l.prazo>=TODAY).length,cor:"#2F6B5E"},
+                  {label:"Pedidos ativos",val:listagens.filter(l=>l.tipo==="pedido"&&l.status==="ativa"&&l.prazo>=TODAY).length,cor:"#B87A00"},
                   {label:"Encontros agendados",val:encontrosAgendados.length,cor:"#ca8a04",tab:"encontros" as AdminTab},
                   {label:"Confirmações pendentes",val:confirmacoesPendentes.length,cor:"#E85D4E",tab:"confirmacoes" as AdminTab},
                   {label:"Ocorrências abertas",val:ocorrencias.filter(o=>o.status==="aberta").length,cor:"#E85D4E",tab:"ocorrencias" as AdminTab},
@@ -2487,7 +2517,7 @@ function PerfilView({ user, onLogout, onUpdatePerfil, onChangePassword, alimento
   const [senhaErro, setSenhaErro] = useState("");
   const [senhaOk, setSenhaOk] = useState("");
   const horarioOpts=["04:00 às 10:00","04:00 às 12:00","04:00 às 14:00","05:00 às 11:00","05:00 às 13:00","06:00 às 12:00","06:00 às 14:00","06:00 às 18:00","07:00 às 15:00","07:00 às 18:00"];
-  function saveEdit() {
+  async function saveEdit() {
     const e: Errors = {};
     const rErr=validateNome(form.responsavel,3,80); if(rErr)e.responsavel=rErr;
     const tErr=validatePhone(form.whatsapp); if(tErr)e.whatsapp=tErr;
@@ -2495,7 +2525,8 @@ function PerfilView({ user, onLogout, onUpdatePerfil, onChangePassword, alimento
     const enErr=validateNome(form.endereco,5,200); if(enErr)e.endereco=enErr;
     if(!form.horario)e.horario="Selecione o horário.";
     setErrors(e); if(Object.keys(e).length>0)return;
-    onUpdatePerfil(form); setIsEditing(false);
+    try { await onUpdatePerfil(form); setIsEditing(false); }
+    catch { setErrors(current => ({ ...current, email: "Nao foi possivel salvar o perfil. Tente novamente." })); }
   }
   return (
     <div className="max-w-lg mx-auto px-4 py-5 w-full min-w-0 overflow-x-hidden">
@@ -2608,7 +2639,10 @@ export default function App() {
       }
       setUser(profile);
       setView(isAdminUser(profile) ? "admin" : "dashboard");
-    })();
+    })().catch(error => {
+      console.error("Failed to load platform data:", error);
+      if (ativo) showToast("Nao foi possivel carregar os dados. Confira as permissoes e migrations do Supabase.");
+    });
     return () => { ativo = false; };
   }, []);
 
@@ -2630,9 +2664,17 @@ export default function App() {
       if (texto.includes("invalid login") || texto.includes("invalid credentials")) return "E-mail ou senha inválidos.";
       return traduzirErroAuth(error?.message);
     }
-    const state = await fetchPlatformState();
+    let state: PlatformState;
+    let profile: Usuario | null;
+    try {
+      state = await fetchPlatformState();
+      profile = state.usuarios.find(u => u.id === data.user.id) ?? await fetchProfileById(data.user.id);
+    } catch (loadError) {
+      console.error("Failed to load account data after login:", loadError);
+      await supabase.auth.signOut();
+      return "Nao foi possivel carregar os dados da conta. Confira as permissoes e migrations do Supabase.";
+    }
     applyPlatform(state);
-    const profile = state.usuarios.find(u => u.id === data.user.id) ?? await fetchProfileById(data.user.id);
     if (!profile) { await supabase.auth.signOut(); return "Perfil não encontrado."; }
     if (profile.status !== "aprovado") {
       await supabase.auth.signOut();
@@ -2686,331 +2728,272 @@ export default function App() {
     setView("landing"); showToast("Cadastro realizado. Aguarde a aprovação do administrador.");
   }
 
-  function handleAddListagem(data: Partial<Listagem>) {
+  async function handleAddListagem(data: Partial<Listagem>) {
     if(!user)return;
-    const nova: Listagem = { id:genId(), tipo:data.tipo!, usuarioId:user.id, alimento:data.alimento!, quantidadeG:data.quantidadeG!, maturacao:data.maturacao!, prazo:data.prazo!, observacao:data.observacao??null, fotoUrl:data.fotoUrl??null, status:"ativa", criadoEm:new Date().toISOString() };
-    setListagens(p=>[nova,...p]); setView("listagens"); showToast("Publicação criada.");
-  }
-
-  function handleEditListagem(id: string, updates: Partial<Listagem>) { setListagens(p=>p.map(l=>l.id===id?{...l,...updates}:l)); showToast("Publicação atualizada."); }
-  function handleEncerrarListagem(id: string) { setListagens(p=>p.map(l=>l.id===id?{...l,status:"cancelada"}:l)); showToast("Publicação encerrada."); }
-
-  function handleAddProposta(data: Partial<Proposta>) {
-    if(!user)return;
-    const nova: Proposta = { id:genId(), listagemId:data.listagemId!, propostaPaiId:data.propostaPaiId??null, versao:data.versao!, status:"proposto", criadoEm:new Date().toISOString(), proponenteId:user.id, oferecem:data.oferecem!, querem:data.querem!, confirmacoes:[] };
-    setPropostas(p=>{ if(data.propostaPaiId)return [...p.map(x=>x.id===data.propostaPaiId?{...x,status:"contraproposto" as StatusTroca}:x),nova]; return [...p,nova]; });
-    setListagens(p=>p.map(l=>l.id===data.listagemId?{...l,status:"em-negociacao"}:l));
-    const l=listagens.find(x=>x.id===data.listagemId);
-    const rootId=data.propostaPaiId??(nova.id);
-    if(l&&l.usuarioId!==user.id){
-      setNotificacoes(p=>[...p,{id:genId(),usuarioId:l.usuarioId,mensagem:`${user.nome} enviou uma proposta para sua ${l.tipo} de ${nomeAlimento(l.alimento,alimentosBD)}.`,lida:false,criadaEm:new Date().toISOString(),listagemId:l.id,propostaId:nova.id}]);
+    let fotoUrl = data.fotoUrl ?? null;
+    let uploadedPhotoPath: string | null = null;
+    if (!supabase) {
+      showToast("Supabase nao configurado; a publicacao nao foi salva.");
+      throw new Error("Supabase not configured");
     }
-    setMensagens(p=>[...p,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:`${user.nome} ${data.propostaPaiId?"enviou uma contraproposta.":"enviou uma proposta."}`,criadaEm:new Date().toISOString(),lida:false}]);
-    showToast("Proposta enviada.");
-  }
-
-  function handleUpdateListagem(id: string, status: StatusListagem) { setListagens(p=>p.map(l=>l.id===id?{...l,status}:l)); }
-
-  function handleUpdateProposta(id: string, updates: Partial<Proposta>) {
-    setPropostas(p=>p.map(x=>x.id===id?{...x,...updates}:x));
-    if(updates.status==="aceito"){ showToast("Proposta aceita. Registre o encontro quando combinar os detalhes."); }
-    else if(updates.status==="cancelado"){ showToast("Proposta cancelada."); }
-  }
-
-  function handleProporEncontro(propostaId: string, data: string, horario: string, local: string) {
-    if(!user) return;
-    const p = propostas.find(x=>x.id===propostaId);
-    const rootId = p?.propostaPaiId ?? propostaId;
-    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
-    const destinatarioId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
-
-    const existing = encontros.find(e => e.propostaId === propostaId && (e.status === "proposto" || e.status === "recusado"));
-    const encounterId = existing ? existing.id : genId();
-
-    if(existing) {
-      setEncontros(prev => prev.map(e => e.id === existing.id ? {
-        ...e,
-        data,
-        horario,
-        local,
-        status: "proposto",
-        propostoPorId: user.id,
-        alteracoes: [...e.alteracoes, { campo: "proposta", de: `${e.data} ${e.horario}`, para: `${data} ${horario}`, em: new Date().toISOString() }]
-      } : e));
-    } else {
-      const novoE: Encontro = {
-        id: encounterId,
-        propostaId,
-        data,
-        horario,
-        local,
-        criadoEm: new Date().toISOString(),
-        alteracoes: [],
-        status: "proposto",
-        propostoPorId: user.id
-      };
-      setEncontros(prev => [...prev, novoE]);
-    }
-
-    const dataFmt = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-    setMensagens(prev => [...prev, {
-      id: genId(),
-      rootPropostaId: rootId,
-      autorId: "sistema",
-      tipo: "sistema",
-      texto: `${user.nome} propôs um encontro para ${dataFmt} às ${horario} em ${local}. Aguardando confirmação da outra parte.`,
-      criadaEm: new Date().toISOString(),
-      lida: false
-    }]);
-
-    if(destinatarioId) {
-      setNotificacoes(prev => [...prev, {
-        id: genId(),
-        usuarioId: destinatarioId,
-        mensagem: `${user.nome} enviou uma proposta de encontro para ${dataFmt} às ${horario}.`,
-        lida: false,
-        criadaEm: new Date().toISOString(),
-        listagemId: l?.id,
-        propostaId
-      }]);
-    }
-
-    if (supabase) {
-      void supabase.from("meetings").upsert({
-        id: encounterId,
-        proposal_id: propostaId,
-        meeting_date: data,
-        meeting_time: horario,
-        location: local,
-        status: "proposto",
-        proposed_by: user.id,
+    if (fotoUrl?.startsWith("data:image/")) {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        showToast("Sua sessao expirou. Entre novamente para publicar.");
+        throw authError ?? new Error("Authenticated user required to upload listing photo");
+      }
+      const image = await fetch(fotoUrl).then(response => response.blob());
+      const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage.from("listing-photos").upload(path, image, {
+        contentType: "image/jpeg",
+        cacheControl: "3600",
+        upsert: false,
       });
-      void supabase.from("messages").insert({
-        proposal_id: rootId,
-        author_id: user.id,
-        kind: "sistema",
-        content: `${user.nome} propôs um encontro para ${dataFmt} às ${horario} em ${local}. Aguardando confirmação.`,
-      });
+      if (uploadError) {
+        console.error("Failed to upload listing photo:", uploadError);
+        showToast("Nao foi possivel enviar a foto. Verifique se a migration do Storage foi aplicada.");
+        throw uploadError;
+      }
+      uploadedPhotoPath = path;
+      fotoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
     }
-
-    showToast("Proposta de encontro enviada.");
+    const nova: Listagem = { id:genId(), tipo:data.tipo!, usuarioId:user.id, alimento:data.alimento!, quantidadeG:data.quantidadeG!, maturacao:data.maturacao!, prazo:data.prazo!, observacao:data.observacao??null, fotoUrl, status:"ativa", criadoEm:new Date().toISOString() };
+    {
+      const { data: saved, error } = await supabase.from("listings").insert({
+        type: nova.tipo, owner_id: nova.usuarioId, food_id: nova.alimento,
+        quantity_g: nova.quantidadeG, ripeness: nova.maturacao, deadline: nova.prazo,
+        observation: nova.observacao, photo_url: nova.fotoUrl, status: nova.status,
+      }).select("id").single();
+      if (error || !saved) {
+        console.error("Failed to save listing:", error);
+        if (uploadedPhotoPath) {
+          const { error: cleanupError } = await supabase.storage.from("listing-photos").remove([uploadedPhotoPath]);
+          if (cleanupError) console.error("Failed to clean up unreferenced listing photo:", cleanupError);
+        }
+        showToast("Nao foi possivel salvar. Confira as permissoes do Supabase e tente novamente.");
+        throw error ?? new Error("Listing insert returned no row");
+      }
+      nova.id = String(saved.id);
+    }
+    setListagens(p=>[nova,...p]); setView("listagens"); showToast("Publicacao criada.");
   }
 
-  function handleAceitarEncontro(encontroId: string) {
-    if(!user) return;
-    const e = encontros.find(x => x.id === encontroId);
-    if(!e) return;
-    const p = propostas.find(x => x.id === e.propostaId);
-    const rootId = p?.propostaPaiId ?? e.propostaId;
-    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
-    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
-
-    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "aceito" } : x));
-    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "encontro-agendado" } : x));
-
-    const dataFmt = new Date(e.data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-    setMensagens(prev => [...prev, {
-      id: genId(),
-      rootPropostaId: rootId,
-      autorId: "sistema",
-      tipo: "sistema",
-      texto: `Encontro confirmado por ambas as partes: ${dataFmt} às ${e.horario} — ${e.local}.`,
-      criadaEm: new Date().toISOString(),
-      lida: false
-    }]);
-
-    if(outroId) {
-      setNotificacoes(prev => [...prev, {
-        id: genId(),
-        usuarioId: outroId,
-        mensagem: `${user.nome} aceitou a proposta de encontro para ${dataFmt} às ${e.horario}!`,
-        lida: false,
-        criadaEm: new Date().toISOString(),
-        listagemId: l?.id,
-        propostaId: e.propostaId
-      }]);
-    }
-
-    if(supabase) {
-      void supabase.from("meetings").update({ status: "aceito" }).eq("id", encontroId);
-      void supabase.from("proposals").update({ status: "encontro-agendado" }).eq("id", e.propostaId);
-      void supabase.from("messages").insert({
-        proposal_id: rootId,
-        author_id: user.id,
-        kind: "sistema",
-        content: `Encontro confirmado por ambas as partes: ${dataFmt} às ${e.horario} — ${e.local}.`,
-      });
-    }
-
-    showToast("Encontro confirmado por ambas as partes!");
+  async function handleEditListagem(id: string, updates: Partial<Listagem>) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const values: Record<string, unknown> = {};
+    if (updates.quantidadeG !== undefined) values.quantity_g = updates.quantidadeG;
+    if (updates.maturacao !== undefined) values.ripeness = updates.maturacao;
+    if (updates.prazo !== undefined) values.deadline = updates.prazo;
+    if (updates.observacao !== undefined) values.observation = updates.observacao;
+    const { data, error } = await supabase.from("listings").update(values).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Listing update failed:", error); showToast("Nao foi possivel salvar as alteracoes da publicacao."); return; }
+    setListagens(items=>items.map(l=>l.id===id?{...l,...updates}:l));
+    showToast("Publicacao atualizada.");
+  }
+  async function handleEncerrarListagem(id: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("listings").update({status:"cancelada"}).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Listing close failed:", error); showToast("Nao foi possivel encerrar a publicacao."); return; }
+    setListagens(items=>items.map(l=>l.id===id?{...l,status:"cancelada"}:l));
+    showToast("Publicacao encerrada.");
   }
 
-  function handleContrapropostaEncontro(encontroId: string, data: string, horario: string, local: string) {
-    if(!user) return;
-    const e = encontros.find(x => x.id === encontroId);
-    if(!e) return;
-    const p = propostas.find(x => x.id === e.propostaId);
-    const rootId = p?.propostaPaiId ?? e.propostaId;
-    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
-    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
-
-    const alts = [...e.alteracoes, {
-      campo: "contraproposta",
-      de: `${e.data} ${e.horario} (${e.local})`,
-      para: `${data} ${horario} (${local})`,
-      em: new Date().toISOString()
-    }];
-
-    setEncontros(prev => prev.map(x => x.id === encontroId ? {
-      ...x,
-      data,
-      horario,
-      local,
+  async function handleAddProposta(data: Partial<Proposta>) {
+    if(!user || !supabase) throw new Error("Supabase is required to submit a proposal");
+    const alvo = listagens.find(l => l.id === data.listagemId);
+    if (!alvo || alvo.usuarioId === user.id || alvo.status !== "ativa" || alvo.prazo < TODAY) {
+      showToast("Esta publicacao nao esta mais aceitando propostas.");
+      throw new Error("Listing is not accepting proposals");
+    }
+    const payload = {
+      listing_id: data.listagemId,
+      parent_id: data.propostaPaiId ?? null,
+      version: data.versao,
       status: "proposto",
-      propostoPorId: user.id,
-      alteracoes: alts
-    } : x));
+      proposer_id: user.id,
+      offered: data.oferecem,
+      requested: data.querem,
+    };
+    const { data: saved, error } = await supabase.from("proposals").insert(payload).select("id, created_at").single();
+    if (error || !saved) {
+      console.error("Failed to save proposal:", error);
+      showToast("Nao foi possivel salvar a proposta. Confira as permissoes e tente novamente.");
+      throw error ?? new Error("Proposal insert returned no row");
+    }
+    const nova: Proposta = { id:String(saved.id), listagemId:data.listagemId!, propostaPaiId:data.propostaPaiId??null, versao:data.versao!, status:"proposto", criadoEm:String(saved.created_at), proponenteId:user.id, oferecem:data.oferecem!, querem:data.querem!, confirmacoes:[] };
+    const rootId = data.propostaPaiId ?? nova.id;
+    const texto = `${user.nome} ${data.propostaPaiId ? "enviou uma contraproposta." : "enviou uma proposta."}`;
 
-    // Notice: keeps status in negotiation until new date is accepted
-    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
+    const sideEffects = await Promise.all([
+      data.propostaPaiId
+        ? supabase.from("proposals").update({ status: "contraproposto" }).eq("id", data.propostaPaiId).select("id").maybeSingle()
+        : Promise.resolve({ error: null, data: { id: "root" } }),
+      supabase.from("listings").update({ status: "em-negociacao" }).eq("id", alvo.id).select("id").maybeSingle(),
+      supabase.from("messages").insert({ proposal_id: rootId, author_id: user.id, kind: "sistema", content: texto }),
+      supabase.from("notifications").insert({ user_id: alvo.usuarioId, message: `${user.nome} enviou uma proposta para sua publica??o de ${nomeAlimento(alvo.alimento, alimentosBD)}.`, listing_id: alvo.id, proposal_id: nova.id }),
+    ]);
+    const sideError = sideEffects.find(result => result.error || !result.data)?.error ?? (sideEffects.some(result=>!result.data) ? new Error("A related row was not updated") : null);
+    if (sideError) {
+      console.error("Proposal saved with incomplete side effects:", sideError);
+      showToast("Proposta salva, mas algumas atualizacoes ou notificacoes falharam. Atualize a pagina.");
+    }
+    setPropostas(prev => data.propostaPaiId
+      ? [...prev.map(x=>x.id===data.propostaPaiId?{...x,status:"contraproposto" as StatusTroca}:x),nova]
+      : [...prev,nova]);
+    setListagens(prev=>prev.map(l=>l.id===alvo.id?{...l,status:"em-negociacao"}:l));
+    setMensagens(prev=>[...prev,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto,criadaEm:new Date().toISOString(),lida:false}]);
+    if (!sideError) showToast("Proposta enviada.");
+  }
 
+  async function handleUpdateListagem(id: string, status: StatusListagem) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("listings").update({ status }).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Listing status update failed:", error); showToast("Nao foi possivel atualizar o status da publicacao."); return; }
+    setListagens(p=>p.map(l=>l.id===id?{...l,status}:l));
+  }
+
+  async function handleUpdateProposta(id: string, updates: Partial<Proposta>) {
+    if (!user || !supabase) { showToast("Supabase nao esta configurado."); return; }
+    const current=propostas.find(p=>p.id===id); if(!current)return;
+    if (updates.status !== "aceito" && updates.status !== "cancelado") return;
+    const listing=listagens.find(l=>l.id===current.listagemId);
+    if (!listing || listing.usuarioId !== user.id || current.proponenteId === user.id || !["proposto","contraproposto"].includes(current.status) || listing.prazo < TODAY || listing.status === "cancelada") {
+      showToast("Voce nao pode alterar esta proposta neste estado."); return;
+    }
+    const chain=buildChain(propostas.filter(p=>p.listagemId===current.listagemId));
+    const closedIds=updates.status==="cancelado"?chain.map(p=>p.id):[id];
+    const writes=await Promise.all([
+      supabase.from("proposals").update({status:updates.status==="cancelado"?"cancelado":"aceito"}).in("id",closedIds).select("id"),
+      updates.status==="aceito"
+        ? supabase.from("listings").update({status:"em-negociacao"}).eq("id",listing.id).select("id").maybeSingle()
+        : supabase.from("listings").update({status:"ativa"}).eq("id",listing.id).select("id").maybeSingle(),
+    ]);
+    const writeError=writes.find(result=>result.error)?.error ?? (writes.some(result=>!result.data || Array.isArray(result.data)&&result.data.length===0) ? new Error("No matching row was updated") : null);
+    if(writeError){console.error("Proposal decision failed:",writeError);showToast("Nao foi possivel atualizar a proposta. Atualize e tente novamente.");return;}
+    if(updates.status==="cancelado"){
+      const ids=new Set(closedIds);
+      setPropostas(items=>items.map(p=>ids.has(p.id)?{...p,status:"cancelado"}:p));
+      setListagens(items=>items.map(l=>l.id===listing.id?{...l,status:"ativa"}:l));
+      showToast("Proposta recusada. A publicacao voltou a aceitar novas negociacoes.");
+    } else {
+      setPropostas(items=>items.map(p=>p.id===id?{...p,status:"aceito"}:p));
+      setListagens(items=>items.map(l=>l.id===listing.id?{...l,status:"em-negociacao"}:l));
+      showToast("Proposta aceita. Agende o encontro quando combinarem os detalhes.");
+    }
+  }
+
+  async function handleProporEncontro(propostaId: string, data: string, horario: string, local: string) {
+    if(!user || !supabase) throw new Error("Meeting scheduling requires Supabase");
+    const p = propostas.find(x=>x.id===propostaId);
+    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
+    if (!p || !l || (l.usuarioId !== user.id && p.proponenteId !== user.id) || p.status !== "aceito" || data < TODAY || !horario || !local.trim()) {
+      showToast("Confira a data, o status da proposta e quem participa da troca.");
+      throw new Error("Meeting proposal is not valid");
+    }
+    const rootId = p.propostaPaiId ?? propostaId;
+    const destinatarioId = p.proponenteId===user.id ? l.usuarioId : p.proponenteId;
+    const existing = encontros.find(e => e.propostaId === propostaId && (e.status === "proposto" || e.status === "recusado"));
     const dataFmt = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-    setMensagens(prev => [...prev, {
-      id: genId(),
-      rootPropostaId: rootId,
-      autorId: "sistema",
-      tipo: "sistema",
-      texto: `${user.nome} enviou uma contraproposta de encontro: ${dataFmt} às ${horario} em ${local}. Aguardando resposta.`,
-      criadaEm: new Date().toISOString(),
-      lida: false
-    }]);
-
-    if(outroId) {
-      setNotificacoes(prev => [...prev, {
-        id: genId(),
-        usuarioId: outroId,
-        mensagem: `${user.nome} enviou uma contraproposta de encontro para ${dataFmt} às ${horario}.`,
-        lida: false,
-        criadaEm: new Date().toISOString(),
-        listagemId: l?.id,
-        propostaId: e.propostaId
-      }]);
+    const content = `${user.nome} propos um encontro para ${dataFmt} as ${horario} em ${local}. Aguardando a outra parte.`;
+    const changes = existing ? [...existing.alteracoes,{campo:"proposal",de:`${existing.data} ${existing.horario}`,para:`${data} ${horario}`,em:new Date().toISOString()}] : [];
+    const meetingWrite = existing
+      ? await supabase.from("meetings").update({ meeting_date:data, meeting_time:horario, location:local, status:"proposto", proposed_by:user.id, changes }).eq("id",existing.id).select("id, created_at").single()
+      : await supabase.from("meetings").insert({ proposal_id:propostaId, meeting_date:data, meeting_time:horario, location:local, status:"proposto", proposed_by:user.id, changes }).select("id, created_at").single();
+    if (meetingWrite.error || !meetingWrite.data) {
+      console.error("Failed to save meeting proposal:", meetingWrite.error);
+      showToast("Nao foi possivel salvar a proposta de encontro. Confira as permissoes do banco.");
+      throw meetingWrite.error ?? new Error("Meeting write returned no row");
     }
+    const [messageWrite, notificationWrite] = await Promise.all([
+      supabase.from("messages").insert({ proposal_id:rootId, author_id:user.id, kind:"sistema", content }),
+      supabase.from("notifications").insert({ user_id:destinatarioId, message:`${user.nome} propos um encontro para ${dataFmt} as ${horario}.`, listing_id:l.id, proposal_id:propostaId }),
+    ]);
+    if (messageWrite.error || notificationWrite.error) {
+      console.error("Meeting saved but a related message/notification failed:", messageWrite.error ?? notificationWrite.error);
+      showToast("A proposta de encontro foi salva, mas nao foi possivel enviar um aviso.");
+    } else showToast("Proposta de encontro enviada.");
+    const meeting: Encontro = { id:String(meetingWrite.data.id), propostaId, data, horario, local, criadoEm:String(meetingWrite.data.created_at), alteracoes:changes, status:"proposto", propostoPorId:user.id };
+    setEncontros(prev=>existing?prev.map(e=>e.id===existing.id?meeting:e):[...prev,meeting]);
+    setMensagens(prev=>[...prev,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
+  }
 
-    if(supabase) {
-      void supabase.from("meetings").update({
-        meeting_date: data,
-        meeting_time: horario,
-        location: local,
-        status: "proposto",
-        proposed_by: user.id,
-        changes: alts
-      }).eq("id", encontroId);
-      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
-      void supabase.from("messages").insert({
-        proposal_id: rootId,
-        author_id: user.id,
-        kind: "sistema",
-        content: `${user.nome} sugeriu nova data/local para o encontro: ${dataFmt} às ${horario} em ${local}.`,
-      });
+  async function persistMeetingTransition(encontroId: string, proposalId: string, meetingValues: Record<string, unknown>, proposalStatus: StatusTroca, rootId: string, content: string, recipientId?: string, notice?: string, listingId?: string): Promise<boolean> {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return false; }
+    try {
+      const writes = await Promise.all([
+        supabase.from("meetings").update(meetingValues).eq("id",encontroId).select("id").maybeSingle(),
+        supabase.from("proposals").update({ status:proposalStatus }).eq("id",proposalId).select("id").maybeSingle(),
+        supabase.from("messages").insert({ proposal_id:rootId, author_id:user?.id, kind:"sistema", content }),
+        recipientId && notice ? supabase.from("notifications").insert({ user_id:recipientId, message:notice, listing_id:listingId, proposal_id:proposalId }) : Promise.resolve({data:{id:"skipped"},error:null}),
+      ]);
+      const error = writes.find(result=>result.error)?.error ?? (writes.some(result=>!result.data) ? new Error("Meeting or proposal was not updated") : null);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error("Meeting transition failed:", error);
+      showToast("Nao foi possivel salvar a alteracao do encontro. Atualize e tente novamente.");
+      try { applyPlatform(await fetchPlatformState()); } catch (refreshError) { console.error("Nao foi possivel atualizar os dados da plataforma:", refreshError); }
+      return false;
     }
+  }
 
+  async function handleAceitarEncontro(encontroId: string) {
+    if(!user)return;
+    const e=encontros.find(x=>x.id===encontroId);
+    if(!e||e.status!=="proposto"||e.propostoPorId===user.id)return;
+    const p=propostas.find(x=>x.id===e.propostaId), l=p?listagens.find(x=>x.id===p.listagemId):null;
+    if(!p||!l||(l.usuarioId!==user.id&&p.proponenteId!==user.id))return;
+    const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
+    const dataFmt=new Date(e.data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    const content=`Encontro confirmado pelas duas partes: ${dataFmt} as ${e.horario} - ${e.local}.`;
+    if(!await persistMeetingTransition(e.id,e.propostaId,{status:"aceito"},"encontro-agendado",rootId,content,recipientId,`${user.nome} confirmou o encontro para ${dataFmt} as ${e.horario}.`,l.id))return;
+    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"aceito"}:x));
+    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"encontro-agendado"}:x));
+    setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
+    showToast("Encontro confirmado.");
+  }
+
+  async function handleContrapropostaEncontro(encontroId: string,data: string,horario: string,local: string) {
+    if(!user||data<TODAY||!horario||!local.trim())return;
+    const e=encontros.find(x=>x.id===encontroId); if(!e||!encontroEmAberto(e))return;
+    const p=propostas.find(x=>x.id===e.propostaId), l=p?listagens.find(x=>x.id===p.listagemId):null;
+    if(!p||!l||(l.usuarioId!==user.id&&p.proponenteId!==user.id))return;
+    const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
+    const changes=[...e.alteracoes,{campo:"counterproposal",de:`${e.data} ${e.horario} (${e.local})`,para:`${data} ${horario} (${local})`,em:new Date().toISOString()}];
+    const dataFmt=new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    const content=`${user.nome} sugeriu novos dados para o encontro de ${dataFmt} as ${horario} em ${local}.`;
+    if(!await persistMeetingTransition(e.id,e.propostaId,{meeting_date:data,meeting_time:horario,location:local,status:"proposto",proposed_by:user.id,changes},"aceito",rootId,content,recipientId,`${user.nome} sugeriu novo horario de encontro para ${dataFmt} as ${horario}.`,l.id))return;
+    setEncontros(items=>items.map(x=>x.id===e.id?{...x,data,horario,local,status:"proposto",propostoPorId:user.id,alteracoes:changes}:x));
+    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
+    setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Contraproposta de encontro enviada.");
   }
 
-  function handleRecusarEncontro(encontroId: string) {
-    if(!user) return;
-    const e = encontros.find(x => x.id === encontroId);
-    if(!e) return;
-    const p = propostas.find(x => x.id === e.propostaId);
-    const rootId = p?.propostaPaiId ?? e.propostaId;
-    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
-    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
-
-    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "recusado" } : x));
-    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
-
-    setMensagens(prev => [...prev, {
-      id: genId(),
-      rootPropostaId: rootId,
-      autorId: "sistema",
-      tipo: "sistema",
-      texto: `${user.nome} não aceitou a data/local proposta para o encontro. Uma nova data pode ser combinada.`,
-      criadaEm: new Date().toISOString(),
-      lida: false
-    }]);
-
-    if(outroId) {
-      setNotificacoes(prev => [...prev, {
-        id: genId(),
-        usuarioId: outroId,
-        mensagem: `${user.nome} não aceitou a proposta de encontro. Você pode sugerir uma nova data.`,
-        lida: false,
-        criadaEm: new Date().toISOString(),
-        listagemId: l?.id,
-        propostaId: e.propostaId
-      }]);
-    }
-
-    if(supabase) {
-      void supabase.from("meetings").update({ status: "recusado" }).eq("id", encontroId);
-      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
-      void supabase.from("messages").insert({
-        proposal_id: rootId,
-        author_id: user.id,
-        kind: "sistema",
-        content: `${user.nome} recusou a proposta de encontro.`,
-      });
-    }
-
+  async function handleRecusarEncontro(encontroId: string) {
+    if(!user)return;
+    const e=encontros.find(x=>x.id===encontroId); if(!e||e.status!=="proposto"||e.propostoPorId===user.id)return;
+    const p=propostas.find(x=>x.id===e.propostaId), l=p?listagens.find(x=>x.id===p.listagemId):null;
+    if(!p||!l||(l.usuarioId!==user.id&&p.proponenteId!==user.id))return;
+    const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
+    const content=`${user.nome} recusou o horario proposto para o encontro.`;
+    if(!await persistMeetingTransition(e.id,e.propostaId,{status:"recusado"},"aceito",rootId,content,recipientId,content,l.id))return;
+    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"recusado"}:x));
+    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
+    setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Proposta de encontro recusada.");
   }
 
-  function handleCancelarEncontro(encontroId: string) {
-    if(!user) return;
-    const e = encontros.find(x => x.id === encontroId);
-    if(!e) return;
-    const p = propostas.find(x => x.id === e.propostaId);
-    const rootId = p?.propostaPaiId ?? e.propostaId;
-    const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
-    const outroId = p ? (p.proponenteId===user.id ? l?.usuarioId : p.proponenteId) : undefined;
-
-    setEncontros(prev => prev.map(x => x.id === encontroId ? { ...x, status: "cancelado" } : x));
-    setPropostas(prev => prev.map(x => x.id === e.propostaId ? { ...x, status: "aceito" } : x));
-
-    setMensagens(prev => [...prev, {
-      id: genId(),
-      rootPropostaId: rootId,
-      autorId: "sistema",
-      tipo: "sistema",
-      texto: `${user.nome} cancelou o agendamento do encontro.`,
-      criadaEm: new Date().toISOString(),
-      lida: false
-    }]);
-
-    if(outroId) {
-      setNotificacoes(prev => [...prev, {
-        id: genId(),
-        usuarioId: outroId,
-        mensagem: `${user.nome} cancelou o agendamento do encontro.`,
-        lida: false,
-        criadaEm: new Date().toISOString(),
-        listagemId: l?.id,
-        propostaId: e.propostaId
-      }]);
-    }
-
-    if(supabase) {
-      void supabase.from("meetings").update({ status: "cancelado" }).eq("id", encontroId);
-      void supabase.from("proposals").update({ status: "aceito" }).eq("id", e.propostaId);
-      void supabase.from("messages").insert({
-        proposal_id: rootId,
-        author_id: user.id,
-        kind: "sistema",
-        content: `${user.nome} cancelou o agendamento do encontro.`,
-      });
-    }
-
+  async function handleCancelarEncontro(encontroId: string) {
+    if(!user)return;
+    const e=encontros.find(x=>x.id===encontroId); if(!e||!encontroEmAberto(e))return;
+    const p=propostas.find(x=>x.id===e.propostaId), l=p?listagens.find(x=>x.id===p.listagemId):null;
+    if(!p||!l||(l.usuarioId!==user.id&&p.proponenteId!==user.id))return;
+    const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
+    const content=`${user.nome} cancelou o encontro.`;
+    if(!await persistMeetingTransition(e.id,e.propostaId,{status:"cancelado"},"aceito",rootId,content,recipientId,content,l.id))return;
+    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"cancelado"}:x));
+    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
+    setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Encontro cancelado.");
   }
 
@@ -3018,79 +3001,164 @@ export default function App() {
     handleProporEncontro(propostaId, data, horario, local);
   }
 
-  function handleRegistrarConfirmacao(propostaId: string, resposta: "aconteceu"|"nao-aconteceu", pesoG?: number) {
-    if(!user)return;
+  async function handleRegistrarConfirmacao(propostaId: string, resposta: "aconteceu"|"nao-aconteceu", pesoG?: number) {
+    if(!user || !supabase) throw new Error("Supabase is required to confirm a trade");
     const p=propostas.find(x=>x.id===propostaId); if(!p)return;
+    if (p.confirmacoes.some(c => c.usuarioId === user.id)) return;
+    const listing = listagens.find(l => l.id === p.listagemId);
+    const meeting = encontros.find(e => e.propostaId === p.id && e.status === "aceito");
+    if (!listing || (listing.usuarioId !== user.id && p.proponenteId !== user.id) || p.status !== "encontro-agendado" || !meeting || TODAY <= meeting.data) {
+      throw new Error("Trade is not eligible for confirmation");
+    }
+    const { error } = await supabase.from("meeting_confirmations").insert({
+      proposal_id: propostaId, user_id: user.id, response: resposta, weight_g: pesoG ?? null,
+    });
+    if (error) {
+      console.error("Failed to save trade confirmation:", error);
+      showToast("Nao foi possivel salvar sua confirmacao. Tente novamente.");
+      throw error;
+    }
     const novaConf: ConfirmacaoEncontro = { usuarioId:user.id, resposta, pesoG, criadaEm:new Date().toISOString() };
     const novasConfs=[...p.confirmacoes,novaConf];
     let novoStatus: StatusTroca="encontro-agendado";
     if(novasConfs.length>=2){ const todosA=novasConfs.every(c=>c.resposta==="aconteceu"); const todosN=novasConfs.every(c=>c.resposta==="nao-aconteceu"); novoStatus=todosA?"concluido":todosN?"nao-compareceu":"divergencia"; }
+    if (novasConfs.length >= 2) {
+      const { data: statusRow, error: statusError } = await supabase.from("proposals").update({ status: novoStatus }).eq("id", propostaId).select("id").maybeSingle();
+      if (statusError || !statusRow) { console.error("Confirmation saved; proposal status update failed:", statusError); showToast("Confirmacao salva, mas nao foi possivel atualizar o status da troca."); }
+      if (novoStatus === "concluido") {
+        const { data: listingRow, error: listingError } = await supabase.from("listings").update({ status: "concluida" }).eq("id", listing.id).select("id").maybeSingle();
+        if (listingError || !listingRow) console.error("Trade completed; listing status update failed:", listingError);
+      }
+    }
     setPropostas(prev=>prev.map(x=>x.id===propostaId?{...x,confirmacoes:novasConfs,status:novoStatus}:x));
-    if(novoStatus==="concluido"){ setListagens(prev=>prev.map(l=>l.id===p.listagemId?{...l,status:"concluida"}:l)); showToast("Troca concluída."); }
-    else if(novoStatus==="nao-compareceu")showToast("Registrado como não realizado.");
-    else if(novoStatus==="divergencia")showToast("Respostas divergentes. Em análise.");
-    else showToast("Confirmação registrada. Aguardando a outra parte.");
+    if(novoStatus==="concluido"){ setListagens(prev=>prev.map(l=>l.id===p.listagemId?{...l,status:"concluida"}:l)); showToast("Troca concluida."); }
+    else if(novoStatus==="nao-compareceu")showToast("Registrado como nao realizado.");
+    else if(novoStatus==="divergencia")showToast("Respostas divergentes. Em analise.");
+    else showToast("Confirmacao registrada. Aguardando a outra parte.");
   }
 
-  function handleReportarProblema(propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string) {
-    if(!user)return;
-    const nova: OcorrenciaPos = { id:genId(), propostaId, listagemId, usuarioId:user.id, tipo, descricao, criadoEm:new Date().toISOString(), status:"aberta" };
+  async function handleReportarProblema(propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string) {
+    if(!user || !supabase) throw new Error("Reporting requires Supabase");
+    const { data, error } = await supabase.from("incidents").insert({ proposal_id:propostaId, listing_id:listagemId, reporter_id:user.id, type:tipo, description:descricao, status:"aberta" }).select("*").single();
+    if (error || !data) { console.error("Incident report failed:", error); showToast("Nao foi possivel reportar o problema. Tente novamente."); throw error ?? new Error("Incident insert returned no row"); }
+    const nova: OcorrenciaPos = { id:String(data.id), propostaId, listagemId, usuarioId:user.id, tipo, descricao, criadoEm:String(data.created_at), status:data.status as OcorrenciaPos["status"] };
     setOcorrencias(p=>[...p,nova]); showToast("Problema reportado ao administrador.");
   }
 
-  function handleSendMensagem(texto: string) {
-    if(!user||!chatPropostaId)return;
-    const nova: Mensagem = { id:genId(), rootPropostaId:chatPropostaId, autorId:user.id, tipo:"texto", texto, criadaEm:new Date().toISOString(), lida:false };
-    setMensagens(p=>[...p,nova]);
+  async function handleSendMensagem(texto: string) {
+    if(!user||!chatPropostaId||!supabase) throw new Error("Chat requires a Supabase session");
+    const { data, error } = await supabase.from("messages").insert({
+      proposal_id: chatPropostaId, author_id: user.id, kind: "texto", content: texto,
+    }).select("id, created_at").single();
+    if (error || !data) {
+      console.error("Failed to save chat message:", error);
+      throw error ?? new Error("Message insert returned no row");
+    }
+    setMensagens(p=>[...p,{id:String(data.id),rootPropostaId:chatPropostaId,autorId:user.id,tipo:"texto",texto,criadaEm:String(data.created_at),lida:false}]);
   }
 
   function handleOpenChat(rootPropostaId: string) { setChatPropostaId(rootPropostaId); navTo("chat"); }
 
-  function markRead(id: string) { setNotificacoes(p=>p.map(n=>n.id===id?{...n,lida:true}:n)); }
-  function markAllRead() { if(!user)return; setNotificacoes(p=>p.map(n=>n.usuarioId===user.id?{...n,lida:true}:n)); }
+  async function markRead(id: string) {
+    if (!supabase) return;
+    const { data, error } = await supabase.from("notifications").update({ read_at:new Date().toISOString() }).eq("id",id).eq("user_id",user?.id).select("id").maybeSingle();
+    if (error || !data) { console.error("Notification read update failed:", error); return; }
+    setNotificacoes(p=>p.map(n=>n.id===id?{...n,lida:true}:n));
+  }
+  async function markAllRead() {
+    if(!user || !supabase)return;
+    const { error } = await supabase.from("notifications").update({ read_at:new Date().toISOString() }).eq("user_id",user.id).is("read_at",null);
+    if (error) { console.error("Mark all notifications read failed:", error); showToast("Nao foi possivel atualizar as notificacoes."); return; }
+    setNotificacoes(p=>p.map(n=>n.usuarioId===user.id?{...n,lida:true}:n));
+  }
 
+  async function updateAdminProfile(id: string, values: Record<string, unknown>, success: string, local: (items: Usuario[]) => Usuario[]) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("profiles").update(values).eq("id", id).select("id").maybeSingle();
+    if (error || !data) { console.error("Admin profile update failed:", error); showToast("Nao foi possivel salvar a acao administrativa. Confira as permissoes."); return; }
+    setUsuarios(local);
+    showToast(success);
+  }
   function handleApprove(id: string) {
-    if (supabase) void supabase.from("profiles").update({ status: "aprovado", rejection_reason: null, block_reason: null }).eq("id", id);
-    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoRejeicao:undefined,motivoBloqueio:undefined}:u)); showToast("Cadastro aprovado.");
+    return updateAdminProfile(id, { status:"aprovado", rejection_reason:null, block_reason:null }, "Cadastro aprovado.", items=>items.map(u=>u.id===id?{...u,status:"aprovado",motivoRejeicao:undefined,motivoBloqueio:undefined}:u));
   }
   function handleRejectWithReason(id: string, motivo: string) {
-    if (supabase) void supabase.from("profiles").update({ status: "rejeitado", rejection_reason: motivo }).eq("id", id);
-    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"rejeitado",motivoRejeicao:motivo}:u)); showToast("Cadastro recusado.");
+    return updateAdminProfile(id, { status:"rejeitado", rejection_reason:motivo }, "Cadastro recusado.", items=>items.map(u=>u.id===id?{...u,status:"rejeitado",motivoRejeicao:motivo}:u));
   }
   function handleBlock(id: string, motivo: string) {
-    if (supabase) void supabase.from("profiles").update({ status: "bloqueado", block_reason: motivo }).eq("id", id);
-    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:motivo}:u)); showToast("Usuário bloqueado.");
+    return updateAdminProfile(id, { status:"bloqueado", block_reason:motivo }, "Usuario bloqueado.", items=>items.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:motivo}:u));
   }
   function handleUnblock(id: string) {
-    if (supabase) void supabase.from("profiles").update({ status: "aprovado", block_reason: null }).eq("id", id);
-    setUsuarios(p=>p.map(u=>u.id===id?{...u,status:"aprovado",motivoBloqueio:undefined}:u)); showToast("Usuário desbloqueado.");
+    return updateAdminProfile(id, { status:"aprovado", block_reason:null }, "Usuario desbloqueado.", items=>items.map(u=>u.id===id?{...u,status:"aprovado",motivoBloqueio:undefined}:u));
   }
-  function handleDeleteUser(id: string) { setUsuarios(p=>p.filter(u=>u.id!==id)); showToast("Usuário removido."); }
-  function handleRemoveListing(id: string) { setListagens(p=>p.map(l=>l.id===id?{...l,status:"cancelada"}:l)); showToast("Publicação encerrada."); }
-
-  function handleAddAlimento(nome: string, catId: string) { setAlimentosBD(p=>[...p,{id:genId(),nome,categoriaId:catId,ativo:true}]); showToast("Alimento adicionado."); }
-  function handleEditAlimento(id: string, nome: string, catId: string, imgUrl: string) { setAlimentosBD(p=>p.map(a=>a.id===id?{...a,nome,categoriaId:catId,imagemUrl:imgUrl||undefined}:a)); showToast("Alimento atualizado."); }
-  function handleToggleAlimento(id: string) { setAlimentosBD(p=>p.map(a=>a.id===id?{...a,ativo:!a.ativo}:a)); }
-  function handleAddCategoria(nome: string) { setCategorias(p=>[...p,{id:genId(),nome,ativa:true}]); }
-  function handleEditCategoria(id: string, nome: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,nome}:c)); }
-  function handleToggleCategoria(id: string) { setCategorias(p=>p.map(c=>c.id===id?{...c,ativa:!c.ativa}:c)); }
+  async function handleDeleteUser(id: string) {
+    await updateAdminProfile(id, { status:"bloqueado", block_reason:"Removido pelo administrador" }, "Acesso do usuario removido.", items=>items.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:"Removido pelo administrador"}:u));
+  }
+  async function handleRemoveListing(id: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("listings").update({ status:"cancelada" }).eq("id", id).select("id").maybeSingle();
+    if (error || !data) { console.error("Listing removal failed:", error); showToast("Nao foi possivel encerrar esta publicacao."); return; }
+    setListagens(items=>items.map(l=>l.id===id?{...l,status:"cancelada"}:l));
+    showToast("Publicacao encerrada.");
+  }
+  async function handleAddAlimento(nome: string, catId: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("foods").insert({ name:nome, category_id:catId, active:true }).select("*").single();
+    if (error || !data) { console.error("Food insert failed:", error); showToast("Nao foi possivel salvar o alimento."); return; }
+    setAlimentosBD(items=>[...items,{id:String(data.id),nome:String(data.name),categoriaId:String(data.category_id),ativo:Boolean(data.active),imagemUrl:data.image_url?String(data.image_url):undefined}]);
+  }
+  async function handleEditAlimento(id: string, nome: string, catId: string, imgUrl: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("foods").update({ name:nome, category_id:catId, image_url:imgUrl||null }).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Food update failed:", error); showToast("Nao foi possivel atualizar o alimento."); return; }
+    setAlimentosBD(items=>items.map(a=>a.id===id?{...a,nome,categoriaId:catId,imagemUrl:imgUrl||undefined}:a));
+  }
+  async function handleToggleAlimento(id: string) {
+    const current=alimentosBD.find(a=>a.id===id); if(!current||!supabase)return;
+    const { data, error } = await supabase.from("foods").update({ active:!current.ativo }).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Food status update failed:", error); showToast("Nao foi possivel atualizar o status do alimento."); return; }
+    setAlimentosBD(items=>items.map(a=>a.id===id?{...a,ativo:!current.ativo}:a));
+  }
+  async function handleAddCategoria(nome: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("categories").insert({ name:nome, active:true }).select("*").single();
+    if (error || !data) { console.error("Category insert failed:", error); showToast("Nao foi possivel salvar a categoria."); return; }
+    setCategorias(items=>[...items,{id:String(data.id),nome:String(data.name),ativa:Boolean(data.active)}]);
+  }
+  async function handleEditCategoria(id: string, nome: string) {
+    if (!supabase) { showToast("Supabase nao esta configurado."); return; }
+    const { data, error } = await supabase.from("categories").update({ name:nome }).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Category update failed:", error); showToast("Nao foi possivel atualizar a categoria."); return; }
+    setCategorias(items=>items.map(c=>c.id===id?{...c,nome}:c));
+  }
+  async function handleToggleCategoria(id: string) {
+    const current=categorias.find(c=>c.id===id); if(!current||!supabase)return;
+    const { data, error } = await supabase.from("categories").update({ active:!current.ativa }).eq("id",id).select("id").maybeSingle();
+    if (error || !data) { console.error("Category status update failed:", error); showToast("Nao foi possivel atualizar o status da categoria."); return; }
+    setCategorias(items=>items.map(c=>c.id===id?{...c,ativa:!current.ativa}:c));
+  }
   async function handleUpdatePerfil(updates: Partial<Usuario>) {
-    if(!user)return;
-    if(supabase && updates.fotoUrl){
-      const { error } = await supabase.from("profiles").update({ avatar_url: updates.fotoUrl }).eq("id", user.id);
-      if(error){ showToast("Não foi possível salvar a foto no Supabase."); return; }
+    if(!user || !supabase) throw new Error("Profile updates require Supabase");
+    if (updates.email && updates.email !== user.email) {
+      const { error: authError } = await supabase.auth.updateUser({ email: updates.email });
+      if (authError) { showToast("Nao foi possivel atualizar o e-mail da conta: " + authError.message); throw authError; }
     }
-    if(supabase && !updates.fotoUrl){
-      await supabase.from("profiles").update({
-        responsible: updates.responsavel ?? user.responsavel,
-        whatsapp: updates.whatsapp ?? user.whatsapp,
-        email: updates.email ?? user.email,
-        address: updates.endereco ?? user.endereco,
-        opening_hours: updates.horario ?? user.horario,
-      }).eq("id", user.id);
+    const profileUpdates: Record<string, unknown> = {};
+    if (updates.fotoUrl !== undefined) profileUpdates.avatar_url = updates.fotoUrl;
+    if (updates.responsavel !== undefined) profileUpdates.responsible = updates.responsavel;
+    if (updates.whatsapp !== undefined) profileUpdates.whatsapp = updates.whatsapp;
+    if (updates.email !== undefined) profileUpdates.email = updates.email;
+    if (updates.endereco !== undefined) profileUpdates.address = updates.endereco;
+    if (updates.horario !== undefined) profileUpdates.opening_hours = updates.horario;
+    if (Object.keys(profileUpdates).length) {
+      const { error } = await supabase.from("profiles").update(profileUpdates).eq("id", user.id);
+      if (error) { showToast("Nao foi possivel salvar o perfil: " + error.message); throw error; }
     }
-    setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u)); setUser(u=>u?{...u,...updates}:u); showToast(updates.fotoUrl?"Foto do perfil salva.":"Dados atualizados.");
+    setUsuarios(p=>p.map(u=>u.id===user.id?{...u,...updates}:u));
+    setUser(u=>u?{...u,...updates}:u);
+    showToast(updates.fotoUrl?"Foto do perfil salva.":"Perfil atualizado.");
   }
+
   async function handleChangePassword(nova: string): Promise<string|null> {
     if (!supabase) return "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.";
     const { error } = await supabase.auth.updateUser({ password: nova });

@@ -99,6 +99,12 @@ export interface PlatformState {
   alimentosBD: AlimentoBD[];
 }
 
+function requireQuery<T>(label: string, result: { data: T | null; error: { message: string } | null }): T {
+  if (result.error) throw new Error(`${label}: ${result.error.message}`);
+  if (result.data === null) throw new Error(`${label}: consulta retornou sem dados.`);
+  return result.data;
+}
+
 function mapLado(raw: unknown): PropostaLado {
   const o = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -133,10 +139,12 @@ function mapUsuario(row: Record<string, unknown>): Usuario {
 
 export async function fetchCatalog(): Promise<{ categorias: CategoriaAlimento[]; alimentosBD: AlimentoBD[] }> {
   if (!supabase) return { categorias: [], alimentosBD: [] };
-  const [{ data: cats }, { data: foods }] = await Promise.all([
+  const [categoriesResult, foodsResult] = await Promise.all([
     supabase.from("categories").select("*").order("name"),
     supabase.from("foods").select("*").order("name"),
   ]);
+  const cats = requireQuery("categories", categoriesResult);
+  const foods = requireQuery("foods", foodsResult);
   return {
     categorias: (cats ?? []).map((c: Record<string, unknown>) => ({
       id: String(c.id), nome: String(c.name), ativa: Boolean(c.active),
@@ -153,8 +161,9 @@ export async function fetchCatalog(): Promise<{ categorias: CategoriaAlimento[];
 
 export async function fetchProfileById(id: string): Promise<Usuario | null> {
   if (!supabase) return null;
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
-  if (error || !data) return null;
+  const { data, error } = await supabase.from("member_directory").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`profiles: ${error.message}`);
+  if (!data) return null;
   return mapUsuario(data as Record<string, unknown>);
 }
 
@@ -166,17 +175,20 @@ export async function fetchPlatformState(): Promise<PlatformState> {
   if (!supabase) return empty;
 
   const catalog = await fetchCatalog();
-  const [
-    { data: profiles },
-    { data: listings },
-    { data: proposals },
-    { data: meetings },
-    { data: messages },
-    { data: notifications },
-    { data: incidents },
-    { data: confirmations },
-  ] = await Promise.all([
-    supabase.from("profiles").select("*"),
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  if (authError) throw new Error(`auth: ${authError.message}`);
+  let isAdmin = false;
+  if (authUser) {
+    const { data: ownProfile, error: profileError } = await supabase
+      .from("profiles").select("type").eq("id", authUser.id).maybeSingle();
+    if (profileError) throw new Error(`profiles: ${profileError.message}`);
+    isAdmin = ownProfile?.type === "admin";
+  }
+  const profilesQuery = isAdmin
+    ? supabase.rpc("admin_list_profiles")
+    : supabase.from("member_directory").select("*");
+  const results = await Promise.all([
+    profilesQuery,
     supabase.from("listings").select("*"),
     supabase.from("proposals").select("*"),
     supabase.from("meetings").select("*"),
@@ -185,6 +197,9 @@ export async function fetchPlatformState(): Promise<PlatformState> {
     supabase.from("incidents").select("*"),
     supabase.from("meeting_confirmations").select("*"),
   ]);
+  const [profiles, listings, proposals, meetings, messages, notifications, incidents, confirmations] = [
+    "profiles", "listings", "proposals", "meetings", "messages", "notifications", "incidents", "meeting_confirmations",
+  ].map((name, index) => requireQuery(name, results[index] as { data: Record<string, unknown>[] | null; error: { message: string } | null }));
 
   const confs = (confirmations ?? []) as Array<Record<string, unknown>>;
 

@@ -27,10 +27,16 @@ Confirme que a consulta alterou exatamente uma linha. Depois entre novamente no 
 
 ### Aplicação
 
-Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env.local` local e no ambiente do deploy. O app também aceita `VITE_SUPABASE_ANON_KEY` para projetos que ainda usam a chave pública legada. Nunca use a `service_role` no frontend. Se a confirmação de e-mail estiver habilitada no Supabase Auth, a pessoa precisa confirmar o endereço antes de entrar.
+Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env.local` local e no ambiente do deploy. O app também aceita `VITE_SUPABASE_ANON_KEY` para projetos que ainda usam a chave pública legada. Nunca use a `service_role` no frontend.
+
+Para permitir a jornada com endereços de e-mail de demonstração sem acesso à caixa postal, desative a confirmação em `Authentication > Sign In / Providers > Email > Confirm email` no painel do Supabase hospedado. A configuração local está em `config.toml`; ela não altera as opções do projeto hospedado nem pode ser aplicada por migration SQL. Depois de desativar a confirmação, novos cadastros entram sem clicar em link. Os endereços ainda precisam ter formato válido (por exemplo, `teste@exemplo.com`) e ser únicos no projeto.
 
 O catálogo inicial contém somente categorias e alimentos de referência; não cria usuários, publicações, propostas ou conversas de demonstração. Fotos de publicação são JPEGs no bucket `listing-photos`; o banco armazena a URL pública do arquivo. A view de diretório respeita o RLS e não expõe documentos pessoais; a listagem completa fica restrita à função administrativa.
 
 ## Projeto com o esquema inicial já instalado
 
 Se as migrations `20261005000100_core_schema.sql` a `20261005000400_starter_catalog.sql` já foram executadas, aplique `20261005000500_secure_profile_directory.sql` para atualizar a view de perfis e restringir a leitura de documentos pessoais. Em um banco existente que não recebeu o esquema inicial desta sequência, não execute as migrations de instalação limpa; é necessária uma atualização compatível com as tabelas e os dados já presentes.
+
+### Usuários de demonstração
+
+O script `scripts/create-demo-users.mjs` cria (ou aprova, se já existirem) dois comerciantes e dois restaurantes. Execute na raiz do projeto com `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` definidos no ambiente. A chave de serviço tem acesso administrativo: use-a somente localmente, nunca no frontend, no repositório ou em variáveis `VITE_`. O script imprime os e-mails e senhas de demonstração ao terminar.

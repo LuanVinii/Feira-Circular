@@ -12,7 +12,7 @@ export function isValidCpf(value) {
 
 export function isValidCnpj(value) {
   const cnpj = value.replace(/[^a-z0-9]/gi, "").toUpperCase();
-  if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj) || /^(.)\1{13}$/.test(cnpj)) return false;
+  if (!/^\d{8}[A-Z0-9]{4}\d{2}$/.test(cnpj) || /^(.)\1{13}$/.test(cnpj)) return false;
   const check = (base, weights) => {
     const sum = [...base].reduce((total, char, index) => total + (char.charCodeAt(0) - 48) * weights[index], 0);
     const remainder = sum % 11;
@@ -21,4 +21,20 @@ export function isValidCnpj(value) {
   const first = check(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
   const second = check(cnpj.slice(0, 12) + first, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
   return first === Number(cnpj[12]) && second === Number(cnpj[13]);
+}
+
+export function formatCnpj(value) {
+  const raw = value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  let cnpj = "";
+  for (const char of raw) {
+    const position = cnpj.length;
+    if (position < 8 && /\d/.test(char)) cnpj += char;
+    else if (position >= 8 && position < 12 && /[A-Z0-9]/.test(char)) cnpj += char;
+    else if (position >= 12 && position < 14 && /\d/.test(char)) cnpj += char;
+  }
+  if (cnpj.length <= 2) return cnpj;
+  if (cnpj.length <= 5) return `${cnpj.slice(0, 2)}.${cnpj.slice(2)}`;
+  if (cnpj.length <= 8) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5)}`;
+  if (cnpj.length <= 12) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8)}`;
+  return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
 }

@@ -218,6 +218,7 @@ export async function fetchPlatformState(): Promise<PlatformState> {
       fotoUrl: (l.photo_url as string) ?? null,
       status: l.status as StatusListagem,
       criadoEm: String(l.created_at),
+      divulgarPublicamente: Boolean(l.public_visible),
     })),
     propostas: (proposals ?? []).map((p: Record<string, unknown>) => ({
       id: String(p.id),

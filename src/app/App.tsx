@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { Component, useState, useRef, useEffect } from "react";
 import type React from "react";
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
 import {
@@ -14,7 +14,9 @@ import {
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase";
 import { fetchCatalog, fetchPlatformState, fetchProfileById, type PlatformState } from "../lib/platform";
-import { isValidCpf, isValidCnpj } from "../lib/documentRules.mjs";
+import { isValidCpf, isValidCnpj, formatCnpj } from "../lib/documentRules.mjs";
+import { PublicExperience, type DemoRole } from "./PublicExperience";
+import { applyDemoMeetingTransition, makeDemoListings, makeEquivalentDemoWeight } from "../lib/demoSeed.mjs";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +32,7 @@ type StatusListagem = "ativa" | "em-negociacao" | "concluida" | "cancelada";
 type StatusUsuario = "pendente" | "aprovado" | "rejeitado" | "bloqueado";
 type AdminTab = "visao-geral" | "confirmacoes" | "encontros" | "usuarios" | "publicacoes" | "trocas" | "ocorrencias" | "alimentos";
 type View =
-  | "landing" | "login" | "registro" | "dashboard"
+  | "landing" | "login" | "registro" | "dashboard" | "public-experience" | "public-wall"
   | "listagens" | "detalhes" | "nova-listagem"
   | "minhas-trocas" | "admin" | "perfil" | "chat";
 
@@ -67,7 +69,7 @@ interface Listagem {
   id: string; tipo: TipoListagem; usuarioId: string; alimento: string;
   quantidadeG: number; maturacao: Maturacao; prazo: string;
   observacao: string | null; fotoUrl: string | null;
-  status: StatusListagem; criadoEm: string;
+  status: StatusListagem; criadoEm: string; divulgarPublicamente?: boolean;
 }
 
 interface PropostaLado {
@@ -160,7 +162,7 @@ function fmtQtd(g: number): string {
 }
 
 function maskCPF(v: string): string { const d = v.replace(/\D/g,"").slice(0,11); if(d.length<=3)return d; if(d.length<=6)return `${d.slice(0,3)}.${d.slice(3)}`; if(d.length<=9)return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`; return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`; }
-function maskCNPJ(v: string): string { const d = v.replace(/[^a-z0-9]/gi,"").toUpperCase().slice(0,14); if(d.length<=2)return d; if(d.length<=5)return `${d.slice(0,2)}.${d.slice(2)}`; if(d.length<=8)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`; if(d.length<=12)return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`; return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`; }
+function maskCNPJ(v: string): string { return formatCnpj(v); }
 function maskPhone(v: string): string { const d = v.replace(/\D/g,"").slice(0,11); if(d.length<=2)return d.length===0?d:`(${d}`; if(d.length<=6)return `(${d.slice(0,2)}) ${d.slice(2)}`; if(d.length<=10)return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; }
 
 function buildChain(propostas: Proposta[]): Proposta[] {
@@ -202,6 +204,54 @@ function getPendingConfirmation(userId: string, propostas: Proposta[], listagens
   return p?.id ?? null;
 }
 
+function buildDemoPlatform(role: DemoRole): { state: PlatformState; user: Usuario } {
+  const now = new Date();
+  const shiftDate = (days: number) => { const d = new Date(now); d.setDate(d.getDate() + days); return d.toISOString(); };
+  const actorId = role === "admin" ? "demo-admin-0" : `demo-${role}-0`;
+  const names = ["Armazém Boa Safra", "Restaurante Raiz", "Hortifruti do Centro", "Sabor da Feira", "Comercial São João", "Cozinha da Praça", "Verduras Oliveira", "Cantina do Mercado", "Frutas do Sertão", "Tempero da Casa", "Banca Primavera", "Restaurante Ponto Verde", "Entreposto Santana", "Canto do Aipim", "Quitanda da Estação", "Restaurante Panelinha"];
+  const users: Usuario[] = names.map((nome, i) => {
+    const tipo: Usuario["tipo"] = i === 0 && role === "admin" ? "admin" : (i % 3 === 1 || i % 3 === 0 ? "comerciante" : "restaurante");
+    const id = i === 0 ? actorId : `demo-${tipo}-${i}`;
+    const status: StatusUsuario = i === 0 ? "aprovado" : role === "admin" && i % 7 === 0 ? "pendente" : role === "admin" && i % 11 === 0 ? "bloqueado" : "aprovado";
+    return { id, nome, tipo, cnpjCpf: "DADOS FICTÍCIOS", documentoTipo: "cnpj", endereco: "Centro de Abastecimento, Feira de Santana-BA", whatsapp: "(75) 90000-0000", responsavel: `Responsável ${i + 1}`, email: `demo${i + 1}@feiracircular.invalid`, alimentosInteresse: ["Tomate", "Manga", "Couve"], horario: "07:00–17:00", status, criadoEm: shiftDate(-45 + i), ultimaAtividade: shiftDate(-i) };
+  });
+  const user = users[0];
+  user.tipo = role === "admin" ? "admin" : role;
+  user.nome = role === "admin" ? "Administração Feira Circular" : role === "restaurante" ? "Restaurante Raiz" : "Armazém Boa Safra";
+  const categoryNames = ["Frutas", "Verduras", "Legumes", "Grãos e cereais"];
+  const categorias: CategoriaAlimento[] = categoryNames.map((nome, i) => ({ id: `demo-category-${i}`, nome, ativa: true }));
+  const base = makeDemoListings(role);
+  const alimentosBD: AlimentoBD[] = [...new Set(base.map(x => x.food))].map((nome, i) => ({ id: `demo-food-${i}`, nome, categoriaId: categorias.find(c => c.nome === base.find(x => x.food === nome)?.category)?.id ?? categorias[0].id, ativo: true }));
+  const statuses: StatusListagem[] = base.map((_, i) => i >= 2 && i < 18 ? "em-negociacao" : ["ativa", "ativa", "concluida", "cancelada", "ativa"][i % 5] as StatusListagem);
+  const listagens: Listagem[] = base.map((item, i) => {
+    const actorOwnsUnnegotiatedOffer = role !== "admin" && [19, 25, 26, 29, 30, 31, 34, 39].includes(i);
+    const actorOwnsListing = i >= 2 && i % 4 === 0 || actorOwnsUnnegotiatedOffer;
+    const owner = role !== "admin" && actorOwnsListing ? user : users.find(u => u.id !== actorId && u.tipo !== "admin" && Number(u.id.split("-").pop()) % 12 === i % 12) ?? users[(i % (users.length - 1)) + 1];
+    const maturity: Maturacao = item.maturity === "verde" ? "verde" : item.maturity === "meio-maduro" ? "meio-maduro" : item.maturity === "muito-maduro" ? "muito-maduro" : "maduro";
+    const demoWeightsG = [600, 700, 1000, 1200, 1500, 2000, 2500, 3000, 5000, 7500, 10000, 12000, 15000, 20000];
+    return { id: `demo-listing-${i}`, tipo: item.kind.toLowerCase() as TipoListagem, usuarioId: owner.id, alimento: alimentosBD.find(f => f.nome === item.food)!.id, quantidadeG: demoWeightsG[(i * 5 + Math.floor(i / 3)) % demoWeightsG.length], maturacao: maturity, prazo: new Date(shiftDate(statuses[i] === "ativa" ? 5 + i % 12 : -2)).toISOString().slice(0, 10), observacao: ["Lote selecionado nesta manhã.", "Retirada combinada no entreposto.", "Boa qualidade e pronto para negociação."][i % 3], fotoUrl: null, status: statuses[i], criadoEm: shiftDate(-i) };
+  });
+  const proposalStatuses: StatusTroca[] = ["proposto", "contraproposto", "aceito", "encontro-agendado", "encontro-agendado", "concluido", "nao-compareceu", "divergencia", "cancelado", "proposto", "aceito", "encontro-agendado", "concluido", "cancelado", "contraproposto", "aceito"];
+  const propostas: Proposta[] = proposalStatuses.map((status, i) => {
+    const listing = listagens[i + 2];
+    const counterparty = users.find(u => u.id !== listing.usuarioId && u.tipo !== "admin") ?? users[1];
+    const proponente = role !== "admin" && listing.usuarioId !== actorId && (i % 3 === 0 || role === "restaurante") ? user : counterparty;
+    const foodId = alimentosBD[i % alimentosBD.length].id;
+    const confirmations: Array<ConfirmacaoEncontro["resposta"]> = status === "concluido" ? ["aconteceu", "aconteceu"] : status === "nao-compareceu" ? ["nao-aconteceu", "nao-aconteceu"] : status === "divergencia" ? ["aconteceu", "nao-aconteceu"] : [];
+    listing.status = status === "cancelado" ? "ativa" : status === "concluido" ? "concluida" : "em-negociacao";
+    return { id: `demo-proposal-${i}`, listagemId: listing.id, propostaPaiId: null, versao: 1, status, criadoEm: shiftDate(-i), proponenteId: proponente.id, oferecem: { alimento: foodId, quantidadeG: makeEquivalentDemoWeight(listing.quantidadeG, i), maturacao: (i % 2 ? "maduro" : "verde") as Maturacao, observacao: null }, querem: { alimento: listing.alimento, quantidadeG: listing.quantidadeG, maturacao: listing.maturacao, observacao: null }, confirmacoes: confirmations.map((resposta, j) => ({ usuarioId: j === 0 ? proponente.id : listing.usuarioId, resposta: resposta as ConfirmacaoEncontro["resposta"], pesoG: listing.quantidadeG, criadaEm: shiftDate(-2) })) };
+  });
+  const encontros: Encontro[] = propostas.filter(p => ["aceito", "encontro-agendado", "concluido", "nao-compareceu", "divergencia"].includes(p.status)).map((p, i) => {
+    const status: StatusEncontro = p.status === "encontro-agendado" || p.status === "concluido" || p.status === "nao-compareceu" || p.status === "divergencia" ? "aceito" : i % 3 === 0 ? "proposto" : i % 3 === 1 ? "recusado" : "cancelado";
+    const past = p.status === "encontro-agendado" || ["concluido", "nao-compareceu", "divergencia"].includes(p.status);
+    return { id: `demo-meeting-${p.id}`, propostaId: p.id, data: new Date(shiftDate(past ? -2 : 3 + i)).toISOString().slice(0, 10), horario: `${8 + i % 9}:00`, local: "Ponto de encontro do entreposto", criadoEm: p.criadoEm, alteracoes: i % 2 ? [{ campo: "horário", de: "09:00", para: `${8 + i % 9}:00`, em: p.criadoEm }] : [], status, propostoPorId: p.proponenteId };
+  });
+  const mensagens: Mensagem[] = propostas.flatMap((p, i) => [{ id: `demo-message-${i}-1`, rootPropostaId: p.id, autorId: p.proponenteId, tipo: "texto" as const, texto: ["Tenho interesse nesse lote. Podemos combinar a retirada?", "Consigo ajustar a quantidade para atender seu pedido?", "Perfeito, vamos alinhar o encontro no entreposto."][i % 3], criadaEm: p.criadoEm, lida: false }, { id: `demo-message-${i}-2`, rootPropostaId: p.id, autorId: "sistema", tipo: "sistema" as const, texto: "A negociação foi atualizada.", criadaEm: shiftDate(-Math.max(0, i - 1)), lida: true }]);
+  const notificacoes: Notificacao[] = propostas.slice(0, 12).map((p, i) => ({ id: `demo-notification-${i}`, usuarioId: user.id, mensagem: ["Você recebeu uma proposta de troca.", "Uma contraproposta foi enviada.", "Um encontro foi confirmado."][i % 3], lida: i > 4, criadaEm: p.criadoEm, listagemId: p.listagemId, propostaId: p.id }));
+  const ocorrencias: OcorrenciaPos[] = propostas.slice(5, 8).map((p, i) => ({ id: `demo-incident-${i}`, propostaId: p.id, listagemId: p.listagemId, usuarioId: user.id, tipo: (["qualidade", "quantidade", "outro"] as const)[i], descricao: ["Divergência na qualidade informada.", "Peso recebido diferente do combinado.", "Solicitação de análise administrativa."][i], criadoEm: p.criadoEm, status: i === 0 ? "aberta" : "em-analise" }));
+  return { user, state: { usuarios: users, listagens, propostas, encontros, mensagens, notificacoes, ocorrencias, categorias, alimentosBD } };
+}
+
 type Errors = Record<string, string>;
 function validateNome(v: string, min=3, max=100): string|null { if(!v.trim())return "Campo obrigatório."; if(v.trim().length<min)return `Mínimo ${min} caracteres.`; if(v.trim().length>max)return `Máximo ${max} caracteres.`; return null; }
 function validateEmail(v: string): string|null { if(!v.trim())return "Campo obrigatório."; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()))return "Informe um e-mail válido."; return null; }
@@ -221,6 +271,25 @@ function Btn({ children, variant="primary", size="md", className="", onClick, di
   const vs = { primary:"bg-primary text-primary-foreground hover:bg-primary/90", secondary:"bg-secondary text-secondary-foreground hover:bg-secondary/80", ghost:"text-foreground hover:bg-muted", danger:"bg-[#E85D4E] text-white hover:bg-[#c94a3c]", outline:"border border-primary text-primary hover:bg-primary/5" };
   const ss = { sm:"px-3 py-1.5 text-xs gap-1.5", md:"px-4 py-2.5 text-sm gap-2", lg:"px-5 py-3 text-sm gap-2" };
   return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center rounded-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${vs[variant]} ${ss[size]} ${className}`}>{children}</button>;
+}
+
+function EmptyRouteView({ title, description, onBack, backLabel="Voltar ao início" }: { title: string; description: string; onBack: () => void; backLabel?: string }) {
+  return <div className="mx-auto flex min-h-[45vh] max-w-xl flex-col items-center justify-center px-5 py-12 text-center">
+    <div className="mb-4 grid h-14 w-14 place-items-center rounded-full bg-secondary text-primary"><Info className="h-6 w-6"/></div>
+    <h2 className="text-lg font-extrabold text-foreground">{title}</h2>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+    <Btn onClick={onBack} className="mt-5">{backLabel}</Btn>
+  </div>;
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode; onRecover: () => void }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) { console.error("Application screen failed to render:", error, info); }
+  render() {
+    if (this.state.hasError) return <EmptyRouteView title="Esta tela não pôde ser carregada" description="O restante da demonstração continua disponível. Volte ao painel e tente outra opção." onBack={this.props.onRecover} backLabel="Voltar ao painel"/>;
+    return this.props.children;
+  }
 }
 
 function Inp({ label, error, note, ...p }: { label?: string; error?: string; note?: string } & InputHTMLAttributes<HTMLInputElement>) {
@@ -504,7 +573,7 @@ function Sidebar({ user, view, setView, notifCount, onNotif, onLogout, adminTab,
 
 // ─── LANDING ─────────────────────────────────────────────────────────────────
 
-function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: ()=>void }) {
+function LandingView({ onLogin, onRegistro, onDemo, onWall }: { onLogin: ()=>void; onRegistro: ()=>void; onDemo: ()=>void; onWall: ()=>void }) {
   return (
     <div className="min-h-dvh bg-background flex flex-col overflow-x-hidden">
       <div className="bg-primary text-primary-foreground px-5">
@@ -522,6 +591,10 @@ function LandingView({ onLogin, onRegistro }: { onLogin: ()=>void; onRegistro: (
           <div className="flex gap-3">
             <Btn size="lg" onClick={onLogin} className="flex-1 border border-white/25 text-white bg-white/10 hover:bg-white/20">Entrar</Btn>
             <Btn variant="danger" size="lg" onClick={onRegistro} className="flex-1">Criar cadastro</Btn>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button onClick={onDemo} className="rounded-lg border border-white/20 px-3 py-2.5 text-xs font-bold text-white/90 transition hover:bg-white/10">Acessar demonstração</button>
+            <button onClick={onWall} className="rounded-lg px-3 py-2.5 text-xs font-bold text-[#E8A33D] transition hover:bg-white/10">Explorar publicações</button>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-8 pt-5 border-t border-white/15">
             {[
@@ -690,7 +763,7 @@ function RegistroView({ onSubmit, onBack, alimentosBD, categorias }: {
             <Inp label="Nome do estabelecimento *" placeholder="Ex: Restaurante do João" maxLength={100} value={form.nome} error={errors.nome} onChange={e=>set("nome",e.target.value)}/>
             <Inp label="Nome do responsável *" placeholder="Nome completo" maxLength={80} value={form.responsavel} error={errors.responsavel} onChange={e=>set("responsavel",e.target.value)}/>
             {form.tipo==="comerciante"&&<div><p className="text-sm font-semibold text-foreground mb-2">Tipo de documento *</p><div className="flex gap-2"><button type="button" onClick={()=>{set("documentoTipo","cpf");set("cnpjCpf","")}} className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold ${form.documentoTipo==="cpf"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>CPF</button><button type="button" onClick={()=>{set("documentoTipo","cnpj");set("cnpjCpf","")}} className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold ${form.documentoTipo==="cnpj"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>CNPJ</button></div></div>}
-            <Inp label={`${form.documentoTipo.toUpperCase()} *`} placeholder={form.documentoTipo==="cpf"?"000.000.000-00":"00.000.000/0001-00"} value={form.cnpjCpf} error={errors.cnpjCpf} onChange={e=>set("cnpjCpf",form.documentoTipo==="cpf"?maskCPF(e.target.value):maskCNPJ(e.target.value))}/>
+            <Inp label={`${form.documentoTipo.toUpperCase()} *`} placeholder={form.documentoTipo==="cpf"?"000.000.000-00":"00.000.000/0001-00"} note={form.documentoTipo==="cnpj"?"Aceita CNPJ tradicional numérico e o novo formato alfanumérico.":undefined} value={form.cnpjCpf} error={errors.cnpjCpf} onChange={e=>set("cnpjCpf",form.documentoTipo==="cpf"?maskCPF(e.target.value):maskCNPJ(e.target.value))}/>
             <Inp label="E-mail *" type="email" placeholder="contato@estabelecimento.com" maxLength={120} value={form.email} error={errors.email} onChange={e=>set("email",e.target.value)}/>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Inp label="Senha *" type="password" value={form.senha} error={errors.senha} onChange={e=>set("senha",e.target.value)}/><Inp label="Confirmar senha *" type="password" value={form.confirmaSenha} error={errors.confirmaSenha} onChange={e=>set("confirmaSenha",e.target.value)}/></div>
             <Inp label="WhatsApp *" placeholder="(75) 99000-0000" value={form.whatsapp} error={errors.whatsapp} onChange={e=>set("whatsapp",maskPhone(e.target.value))}/>
@@ -896,11 +969,11 @@ function DashboardView({ user, listagens, propostas, usuarios, encontros, pendin
 
 // ─── LISTAGENS ────────────────────────────────────────────────────────────────
 
-function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo }: {
+function ListagensView({ listagens, usuarios, alimentosBD, categorias, navTo, filtroTipo, setFiltroTipo }: {
   listagens: Listagem[]; usuarios: Usuario[]; alimentosBD: AlimentoBD[];
   categorias: CategoriaAlimento[]; navTo: (v: View, id: string, from: View)=>void;
+  filtroTipo: "todos"|TipoListagem; setFiltroTipo: (tipo: "todos"|TipoListagem)=>void;
 }) {
-  const [filtroTipo, setFiltroTipo] = useState<"todos"|TipoListagem>("todos");
   const [filtroAlimento, setFiltroAlimento] = useState("");
   const [filtroMat, setFiltroMat] = useState<""|Maturacao>("");
   const alimentosAtivos = alimentosBD.filter(a=>a.ativo);
@@ -943,7 +1016,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
   alimentosBD: AlimentoBD[]; categorias: CategoriaAlimento[];
 }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ tipo:"oferta" as TipoListagem, alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, prazo:"", observacao:"", fotoUrl:"" });
+  const [form, setForm] = useState({ tipo:"oferta" as TipoListagem, alimento:"", quantidade:"", unidade:"kg" as Unidade, maturacao:"" as ""|Maturacao, prazo:"", observacao:"", fotoUrl:"", divulgarPublicamente:false });
   const [errors, setErrors] = useState<Errors>({});
   const alimentosAtivos = alimentosBD.filter(a=>a.ativo);
   const catsAtivas = categorias.filter(c=>c.ativa);
@@ -962,7 +1035,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
     setErrors(e); if(Object.keys(e).length>0)return;
     const alim = alimentosBD.find(a=>a.id===form.alimento);
     try {
-      await onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:form.fotoUrl || alim?.imagemUrl || null, status:"ativa" });
+      await onSubmit({ tipo:form.tipo, alimento:form.alimento, quantidadeG:toGrams(Number(form.quantidade),form.unidade), maturacao:form.maturacao as Maturacao, prazo:form.prazo, observacao:form.observacao||null, fotoUrl:form.fotoUrl || alim?.imagemUrl || null, status:"ativa", divulgarPublicamente:form.divulgarPublicamente });
     } catch {
       setErrors(current => ({ ...current, foto: "N?o foi poss?vel publicar. Confira sua conex?o e tente novamente." }));
     }
@@ -1024,6 +1097,7 @@ function NovaListagemView({ onSubmit, onBack, alimentosBD, categorias }: {
           </div>
           <Txa label="Observação (opcional, máx. 140 caracteres)" placeholder="Detalhe curto sobre o lote..." maxLength={140} rows={3} value={form.observacao} error={errors.observacao} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}/>
           {form.observacao&&<p className="text-xs text-muted-foreground text-right">{form.observacao.length}/140</p>}
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-secondary/50 p-3"><input type="checkbox" checked={form.divulgarPublicamente} onChange={e=>setForm(f=>({...f,divulgarPublicamente:e.target.checked}))} className="mt-0.5 h-4 w-4 accent-primary"/><span><span className="block text-sm font-bold text-foreground">Exibir no mural público</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">Opcional. O mural oculta identidade, contato, endereço e observações do estabelecimento.</span></span></label>
           <div className="flex gap-3"><Btn variant="ghost" onClick={()=>setStep(2)}>Voltar</Btn><Btn onClick={submit} className="flex-1"><Check className="w-4 h-4"/>Publicar</Btn></div>
         </div>
       )}
@@ -1542,15 +1616,15 @@ function DetalhesView({
 
   async function submitProposta() {
     const e: Errors = {};
-    if(pForm.modo!=="equivalente"&&!pForm.alimento)e.alimento="Selecione um alimento.";
+    if(pForm.modo==="outro"&&!pForm.alimento)e.alimento="Selecione um alimento.";
     const quantidadeG=pForm.modo==="equivalente"?listagem.quantidadeG:toGrams(Number(pForm.quantidade),pForm.unidade);
     if(pForm.modo!=="equivalente"){const qErr=validateQtd(pForm.quantidade);if(qErr)e.quantidade=qErr;if(quantidadeG>listagem.quantidadeG*1.2)e.quantidade="A quantidade pode ser no máximo 20% maior que a publicação.";}
-    if(pForm.modo!=="equivalente"&&!pForm.maturacao)e.maturacao="Selecione a maturação.";
+    if(pForm.modo==="outro"&&!pForm.maturacao)e.maturacao="Selecione a maturação.";
     setPErrors(e); if(Object.keys(e).length>0)return;
     const negociacaoEncerrada = cadeia.length > 0 && cadeia.every(p=>p.status==="cancelado");
     const pai=negociacaoEncerrada?null:(cadeia.length>0?ultima.id:null);
     try {
-      await onAddProposta({ listagemId, propostaPaiId:pai, versao:negociacaoEncerrada?1:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.modo==="equivalente"?listagem.alimento:pForm.alimento,quantidadeG,maturacao:pForm.modo==="equivalente"?listagem.maturacao:pForm.maturacao as Maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG:listagem.quantidadeG,maturacao:listagem.maturacao,observacao:null} });
+      await onAddProposta({ listagemId, propostaPaiId:pai, versao:negociacaoEncerrada?1:cadeia.length+1, proponenteId:user.id, oferecem:{alimento:pForm.modo==="outro"?pForm.alimento:listagem.alimento,quantidadeG,maturacao:pForm.modo==="outro"?pForm.maturacao as Maturacao:listagem.maturacao,observacao:pForm.observacao||null}, querem:{alimento:listagem.alimento,quantidadeG:listagem.quantidadeG,maturacao:listagem.maturacao,observacao:null} });
       setShowPForm(false); setPForm({modo:"equivalente",alimento:"",quantidade:"",unidade:"kg",maturacao:"",observacao:""});
     } catch {
       setPErrors({ quantidade: "N?o foi poss?vel salvar a proposta. Tente novamente." });
@@ -1902,10 +1976,10 @@ function DetalhesView({
           showPForm ? (
             <div className="border border-border rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between"><p className="font-bold text-foreground">{cadeia.length>0?"Contraproposta":"Proposta de troca"}</p><button onClick={()=>setShowPForm(false)}><X className="w-4 h-4 text-muted-foreground"/></button></div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><button type="button" onClick={()=>setPForm(f=>({...f,modo:"equivalente",alimento:listagem.alimento,quantidade:""}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="equivalente"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Troca equivalente<p className="font-normal mt-1">Mesmo alimento e peso</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"quantidade"}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="quantidade"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Ajustar peso<p className="font-normal mt-1">Até 20% a mais</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"outro"}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="outro"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Outro alimento<p className="font-normal mt-1">Escolha o que oferecer</p></button></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><button type="button" onClick={()=>setPForm(f=>({...f,modo:"equivalente",alimento:listagem.alimento,maturacao:listagem.maturacao,quantidade:""}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="equivalente"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Troca equivalente<p className="font-normal mt-1">Mesmo alimento e peso</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"quantidade",alimento:listagem.alimento,maturacao:listagem.maturacao}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="quantidade"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Ajustar peso<p className="font-normal mt-1">Até 20% a mais</p></button><button type="button" onClick={()=>setPForm(f=>({...f,modo:"outro",alimento:"",maturacao:""}))} className={`p-3 rounded-lg border text-left text-xs font-semibold ${pForm.modo==="outro"?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground"}`}>Outro alimento<p className="font-normal mt-1">Escolha o que oferecer</p></button></div>
               <div className="bg-primary/5 rounded-xl p-4 space-y-3">
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Eu ofereço</p>
-                {pForm.modo!=="equivalente"&&<Sel value={pForm.alimento} error={pErrors.alimento} onChange={e=>{setPForm(f=>({...f,alimento:e.target.value}));setPErrors(er=>{const n={...er};delete n.alimento;return n;});}}>
+                {pForm.modo==="outro"&&<Sel value={pForm.alimento} error={pErrors.alimento} onChange={e=>{setPForm(f=>({...f,alimento:e.target.value}));setPErrors(er=>{const n={...er};delete n.alimento;return n;});}}>
                   <option value="">Selecione o alimento</option>
                   {cats.map(catId=><optgroup key={catId} label={catId}>{alimentosAtivos.filter(a=>a.categoriaId===catId).map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}</optgroup>)}
                 </Sel>}
@@ -2589,10 +2663,13 @@ function PerfilView({ user, onLogout, onUpdatePerfil, onChangePassword, alimento
 
 export default function App() {
   const [view, setView]           = useState<View>("landing");
+  const demoStartedRef = useRef(false);
+  const [listagensFiltroTipo, setListagensFiltroTipo] = useState<"todos"|TipoListagem>("todos");
   const [selectedId, setSelectedId] = useState<string|null>(null);
   const [fromView, setFromView]   = useState<View>("listagens");
   const [chatPropostaId, setChatPropostaId] = useState<string|null>(null);
   const [user, setUser]           = useState<Usuario|null>(null);
+  const [demoMode, setDemoMode]   = useState(false);
   const [toast, setToast]         = useState("");
   const [adminTab, setAdminTab]   = useState<AdminTab>("visao-geral");
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -2623,16 +2700,17 @@ export default function App() {
     let ativo = true;
     (async () => {
       const catalog = await fetchCatalog();
-      if (!ativo) return;
+      if (!ativo || demoStartedRef.current) return;
       setCategorias(catalog.categorias);
       setAlimentosBD(catalog.alimentosBD);
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
-      if (!data.session) return;
+      if (!ativo || demoStartedRef.current || !data.session) return;
       const state = await fetchPlatformState();
-      if (!ativo) return;
+      if (!ativo || demoStartedRef.current) return;
       applyPlatform(state);
       const profile = state.usuarios.find(u => u.id === data.session!.user.id) ?? await fetchProfileById(data.session.user.id);
+      if (!ativo || demoStartedRef.current) return;
       if (!profile || profile.status !== "aprovado") {
         await supabase.auth.signOut();
         return;
@@ -2646,7 +2724,48 @@ export default function App() {
     return () => { ativo = false; };
   }, []);
 
+  useEffect(() => {
+    if (!user || !supabase || demoMode) return;
+    let ativo = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        try {
+          const state = await fetchPlatformState();
+          if (ativo && !demoStartedRef.current) applyPlatform(state);
+        } catch (error) {
+          console.error("Realtime refresh failed:", error);
+        }
+      }, 180);
+    };
+    let channel = supabase.channel(`platform-${user.id}`);
+    for (const table of ["listings", "proposals", "meetings", "messages", "notifications", "meeting_confirmations", "incidents"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+    }
+    channel.subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn("Realtime subscription unavailable; persisted data will refresh on navigation.");
+      }
+    });
+    return () => {
+      ativo = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, demoMode]);
+
   function showToast(msg: string) { setToast(msg); setTimeout(()=>setToast(""),3500); }
+
+  function startDemo(role: DemoRole) {
+    demoStartedRef.current = true;
+    const demo = buildDemoPlatform(role);
+    applyPlatform(demo.state);
+    setDemoMode(true);
+    setUser(demo.user);
+    setAdminTab("visao-geral");
+    setView(role === "admin" ? "admin" : "dashboard");
+  }
 
   function navTo(v: View, id?: string, from?: View) {
     if(id)setSelectedId(id); if(from)setFromView(from); setView(v);
@@ -2687,6 +2806,11 @@ export default function App() {
     return null;
   }
   async function handleLogout() {
+    if (demoMode) {
+      setDemoMode(false); setUser(null); setView("landing"); setSelectedId(null); setChatPropostaId(null);
+      setUsuarios([]); setListagens([]); setPropostas([]); setEncontros([]); setMensagens([]); setNotificacoes([]); setOcorrencias([]);
+      return;
+    }
     if (supabase) await supabase.auth.signOut();
     setUser(null); setView("landing");
   }
@@ -2732,6 +2856,10 @@ export default function App() {
     if(!user)return;
     let fotoUrl = data.fotoUrl ?? null;
     let uploadedPhotoPath: string | null = null;
+    if (demoMode) {
+      const nova: Listagem = { id:genId(), tipo:data.tipo!, usuarioId:user.id, alimento:data.alimento!, quantidadeG:data.quantidadeG!, maturacao:data.maturacao!, prazo:data.prazo!, observacao:data.observacao??null, fotoUrl, status:"ativa", criadoEm:new Date().toISOString(), divulgarPublicamente:false };
+      setListagens(items=>[nova,...items]); setView("listagens"); showToast("Publicação adicionada à demonstração."); return;
+    }
     if (!supabase) {
       showToast("Supabase nao configurado; a publicacao nao foi salva.");
       throw new Error("Supabase not configured");
@@ -2757,12 +2885,12 @@ export default function App() {
       uploadedPhotoPath = path;
       fotoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
     }
-    const nova: Listagem = { id:genId(), tipo:data.tipo!, usuarioId:user.id, alimento:data.alimento!, quantidadeG:data.quantidadeG!, maturacao:data.maturacao!, prazo:data.prazo!, observacao:data.observacao??null, fotoUrl, status:"ativa", criadoEm:new Date().toISOString() };
+    const nova: Listagem = { id:genId(), tipo:data.tipo!, usuarioId:user.id, alimento:data.alimento!, quantidadeG:data.quantidadeG!, maturacao:data.maturacao!, prazo:data.prazo!, observacao:data.observacao??null, fotoUrl, status:"ativa", criadoEm:new Date().toISOString(), divulgarPublicamente:data.divulgarPublicamente===true };
     {
       const { data: saved, error } = await supabase.from("listings").insert({
         type: nova.tipo, owner_id: nova.usuarioId, food_id: nova.alimento,
         quantity_g: nova.quantidadeG, ripeness: nova.maturacao, deadline: nova.prazo,
-        observation: nova.observacao, photo_url: nova.fotoUrl, status: nova.status,
+        observation: nova.observacao, photo_url: nova.fotoUrl, status: nova.status, public_visible:nova.divulgarPublicamente,
       }).select("id").single();
       if (error || !saved) {
         console.error("Failed to save listing:", error);
@@ -2779,6 +2907,7 @@ export default function App() {
   }
 
   async function handleEditListagem(id: string, updates: Partial<Listagem>) {
+    if (demoMode) { setListagens(items=>items.map(l=>l.id===id?{...l,...updates}:l)); showToast("Publicação atualizada na demonstração."); return; }
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const values: Record<string, unknown> = {};
     if (updates.quantidadeG !== undefined) values.quantity_g = updates.quantidadeG;
@@ -2791,6 +2920,7 @@ export default function App() {
     showToast("Publicacao atualizada.");
   }
   async function handleEncerrarListagem(id: string) {
+    if (demoMode) { setListagens(items=>items.map(l=>l.id===id?{...l,status:"cancelada"}:l)); showToast("Publicação encerrada na demonstração."); return; }
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("listings").update({status:"cancelada"}).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Listing close failed:", error); showToast("Nao foi possivel encerrar a publicacao."); return; }
@@ -2799,6 +2929,18 @@ export default function App() {
   }
 
   async function handleAddProposta(data: Partial<Proposta>) {
+    if (demoMode) {
+      if (!user) { showToast("Escolha um perfil demonstrativo para continuar."); return; }
+      const alvo = listagens.find(l=>l.id===data.listagemId);
+      if (!alvo || alvo.usuarioId===user.id || alvo.status!=="ativa") { showToast("Esta oferta nao esta disponivel para uma nova proposta."); return; }
+      const nova: Proposta = { id:genId(), listagemId:alvo.id, propostaPaiId:data.propostaPaiId??null, versao:data.versao??1, status:"proposto", criadoEm:new Date().toISOString(), proponenteId:user.id, oferecem:data.oferecem!, querem:data.querem!, confirmacoes:[] };
+      const rootId=data.propostaPaiId??nova.id, texto=`${user.nome} enviou ${data.propostaPaiId?"uma contraproposta":"uma proposta"}.`;
+      setPropostas(items=>[...items.map(p=>p.id===data.propostaPaiId?{...p,status:"contraproposto" as StatusTroca}:p),nova]);
+      setListagens(items=>items.map(l=>l.id===alvo.id?{...l,status:"em-negociacao"}:l));
+      setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto,criadaEm:new Date().toISOString(),lida:false}]);
+      setNotificacoes(items=>[{id:genId(),usuarioId:alvo.usuarioId,mensagem:texto,lida:false,criadaEm:new Date().toISOString(),listagemId:alvo.id,propostaId:nova.id},...items]);
+      showToast("Proposta registrada na demonstração."); return;
+    }
     if(!user || !supabase) throw new Error("Supabase is required to submit a proposal");
     const alvo = listagens.find(l => l.id === data.listagemId);
     if (!alvo || alvo.usuarioId === user.id || alvo.status !== "ativa" || alvo.prazo < TODAY) {
@@ -2846,6 +2988,7 @@ export default function App() {
   }
 
   async function handleUpdateListagem(id: string, status: StatusListagem) {
+    if (demoMode) { setListagens(items=>items.map(l=>l.id===id?{...l,status}:l)); showToast("Status atualizado no modo demonstrativo."); return; }
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("listings").update({ status }).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Listing status update failed:", error); showToast("Nao foi possivel atualizar o status da publicacao."); return; }
@@ -2853,6 +2996,14 @@ export default function App() {
   }
 
   async function handleUpdateProposta(id: string, updates: Partial<Proposta>) {
+    if (demoMode) {
+      if (updates.status !== "aceito" && updates.status !== "cancelado") return;
+      const proposal=propostas.find(p=>p.id===id); if(!proposal)return;
+      setPropostas(items=>items.map(p=>p.id===id||updates.status==="cancelado"&&p.listagemId===proposal.listagemId?{...p,status:updates.status!}:p));
+      if (updates.status==="aceito") setListagens(items=>items.map(l=>l.id===proposal.listagemId?{...l,status:"em-negociacao"}:l));
+      else setListagens(items=>items.map(l=>l.id===proposal.listagemId?{...l,status:"ativa"}:l));
+      showToast(updates.status==="aceito"?"Proposta aceita na demonstração.":"Proposta recusada na demonstração."); return;
+    }
     if (!user || !supabase) { showToast("Supabase nao esta configurado."); return; }
     const current=propostas.find(p=>p.id===id); if(!current)return;
     if (updates.status !== "aceito" && updates.status !== "cancelado") return;
@@ -2883,6 +3034,20 @@ export default function App() {
   }
 
   async function handleProporEncontro(propostaId: string, data: string, horario: string, local: string) {
+    if (demoMode) {
+      if (!user) { showToast("Escolha um perfil demonstrativo para continuar."); return; }
+      const p=propostas.find(x=>x.id===propostaId), l=p?listagens.find(x=>x.id===p.listagemId):null;
+      if (!p||!l||(l.usuarioId!==user.id&&p.proponenteId!==user.id)||p.status!=="aceito"||data<TODAY||!horario||!local.trim()) { showToast("Confira a negociacao e os dados do encontro."); return; }
+      const existing=encontros.find(e=>e.propostaId===propostaId&&(e.status==="proposto"||e.status==="recusado"||e.status==="cancelado"));
+      const changes=existing?[...existing.alteracoes,{campo:"proposal",de:`${existing.data} ${existing.horario}`,para:`${data} ${horario}`,em:new Date().toISOString()}]:[];
+      const meeting: Encontro={id:existing?.id??genId(),propostaId,data,horario,local,criadoEm:existing?.criadoEm??new Date().toISOString(),alteracoes:changes,status:"proposto",propostoPorId:user.id};
+      setEncontros(items=>existing?items.map(e=>e.id===existing.id?meeting:e):[meeting,...items]);
+      const rootId=p.propostaPaiId??p.id, text=`${user.nome} propôs um encontro para ${fmtDate(data)} às ${horario}.`;
+      setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:text,criadaEm:new Date().toISOString(),lida:false}]);
+      const recipient=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
+      setNotificacoes(items=>[{id:genId(),usuarioId:recipient,mensagem:text,lida:false,criadaEm:new Date().toISOString(),listagemId:l.id,propostaId:p.id},...items]);
+      showToast("Encontro proposto na demonstração."); return;
+    }
     if(!user || !supabase) throw new Error("Meeting scheduling requires Supabase");
     const p = propostas.find(x=>x.id===propostaId);
     const l = p ? listagens.find(x=>x.id===p.listagemId) : null;
@@ -2918,16 +3083,48 @@ export default function App() {
   }
 
   async function persistMeetingTransition(encontroId: string, proposalId: string, meetingValues: Record<string, unknown>, proposalStatus: StatusTroca, rootId: string, content: string, recipientId?: string, notice?: string, listingId?: string): Promise<boolean> {
+    if (demoMode) {
+      const next=applyDemoMeetingTransition({encontros,propostas},{
+        meetingId:encontroId,
+        proposalId,
+        meetingValues:{
+          ...(meetingValues.meeting_date!==undefined?{data:String(meetingValues.meeting_date)}:{}),
+          ...(meetingValues.meeting_time!==undefined?{horario:String(meetingValues.meeting_time)}:{}),
+          ...(meetingValues.location!==undefined?{local:String(meetingValues.location)}:{}),
+          ...(meetingValues.status!==undefined?{status:meetingValues.status as StatusEncontro}:{}),
+          ...(meetingValues.proposed_by!==undefined?{propostoPorId:String(meetingValues.proposed_by)}:{}),
+          ...(meetingValues.changes!==undefined?{alteracoes:meetingValues.changes as Encontro["alteracoes"]}:{}),
+        },
+        proposalStatus,
+      });
+      if(!next)return false;
+      setEncontros(next.encontros as Encontro[]);
+      setPropostas(next.propostas as Proposta[]);
+      if(recipientId&&notice)setNotificacoes(items=>[{id:genId(),usuarioId:recipientId,mensagem:notice,lida:false,criadaEm:new Date().toISOString(),listagemId,propostaId},...items]);
+      return true;
+    }
     if (!supabase) { showToast("Supabase nao esta configurado."); return false; }
     try {
+      const meetingWrite = await supabase.from("meetings").update(meetingValues).eq("id",encontroId).select("id").maybeSingle();
+      if (meetingWrite.error || !meetingWrite.data) throw meetingWrite.error ?? new Error("Meeting was not updated");
+      const proposalWrite = await supabase.from("proposals").update({ status:proposalStatus }).eq("id",proposalId).select("id").maybeSingle();
+      if (proposalWrite.error || !proposalWrite.data) throw proposalWrite.error ?? new Error("Proposal was not updated");
       const writes = await Promise.all([
-        supabase.from("meetings").update(meetingValues).eq("id",encontroId).select("id").maybeSingle(),
-        supabase.from("proposals").update({ status:proposalStatus }).eq("id",proposalId).select("id").maybeSingle(),
         supabase.from("messages").insert({ proposal_id:rootId, author_id:user?.id, kind:"sistema", content }),
         recipientId && notice ? supabase.from("notifications").insert({ user_id:recipientId, message:notice, listing_id:listingId, proposal_id:proposalId }) : Promise.resolve({data:{id:"skipped"},error:null}),
       ]);
-      const error = writes.find(result=>result.error)?.error ?? (writes.some(result=>!result.data) ? new Error("Meeting or proposal was not updated") : null);
+      const error = writes.find(result=>result.error)?.error ?? (writes.some(result=>!result.data) ? new Error("A meeting notification was not written") : null);
       if (error) throw error;
+      setEncontros(items=>items.map(e=>e.id===encontroId?{
+        ...e,
+        ...(meetingValues.meeting_date!==undefined?{data:String(meetingValues.meeting_date)}:{}),
+        ...(meetingValues.meeting_time!==undefined?{horario:String(meetingValues.meeting_time)}:{}),
+        ...(meetingValues.location!==undefined?{local:String(meetingValues.location)}:{}),
+        ...(meetingValues.status!==undefined?{status:meetingValues.status as StatusEncontro}:{}),
+        ...(meetingValues.proposed_by!==undefined?{propostoPorId:String(meetingValues.proposed_by)}:{}),
+        ...(meetingValues.changes!==undefined?{alteracoes:meetingValues.changes as Encontro["alteracoes"]}:{}),
+      }:e));
+      setPropostas(items=>items.map(p=>p.id===proposalId?{...p,status:proposalStatus}:p));
       return true;
     } catch (error) {
       console.error("Meeting transition failed:", error);
@@ -2947,8 +3144,6 @@ export default function App() {
     const dataFmt=new Date(e.data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
     const content=`Encontro confirmado pelas duas partes: ${dataFmt} as ${e.horario} - ${e.local}.`;
     if(!await persistMeetingTransition(e.id,e.propostaId,{status:"aceito"},"encontro-agendado",rootId,content,recipientId,`${user.nome} confirmou o encontro para ${dataFmt} as ${e.horario}.`,l.id))return;
-    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"aceito"}:x));
-    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"encontro-agendado"}:x));
     setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Encontro confirmado.");
   }
@@ -2963,8 +3158,6 @@ export default function App() {
     const dataFmt=new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
     const content=`${user.nome} sugeriu novos dados para o encontro de ${dataFmt} as ${horario} em ${local}.`;
     if(!await persistMeetingTransition(e.id,e.propostaId,{meeting_date:data,meeting_time:horario,location:local,status:"proposto",proposed_by:user.id,changes},"aceito",rootId,content,recipientId,`${user.nome} sugeriu novo horario de encontro para ${dataFmt} as ${horario}.`,l.id))return;
-    setEncontros(items=>items.map(x=>x.id===e.id?{...x,data,horario,local,status:"proposto",propostoPorId:user.id,alteracoes:changes}:x));
-    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
     setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Contraproposta de encontro enviada.");
   }
@@ -2977,8 +3170,6 @@ export default function App() {
     const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
     const content=`${user.nome} recusou o horario proposto para o encontro.`;
     if(!await persistMeetingTransition(e.id,e.propostaId,{status:"recusado"},"aceito",rootId,content,recipientId,content,l.id))return;
-    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"recusado"}:x));
-    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
     setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Proposta de encontro recusada.");
   }
@@ -2991,8 +3182,6 @@ export default function App() {
     const rootId=p.propostaPaiId??e.propostaId, recipientId=p.proponenteId===user.id?l.usuarioId:p.proponenteId;
     const content=`${user.nome} cancelou o encontro.`;
     if(!await persistMeetingTransition(e.id,e.propostaId,{status:"cancelado"},"aceito",rootId,content,recipientId,content,l.id))return;
-    setEncontros(items=>items.map(x=>x.id===e.id?{...x,status:"cancelado"}:x));
-    setPropostas(items=>items.map(x=>x.id===e.propostaId?{...x,status:"aceito"}:x));
     setMensagens(items=>[...items,{id:genId(),rootPropostaId:rootId,autorId:"sistema",tipo:"sistema",texto:content,criadaEm:new Date().toISOString(),lida:false}]);
     showToast("Encontro cancelado.");
   }
@@ -3002,6 +3191,17 @@ export default function App() {
   }
 
   async function handleRegistrarConfirmacao(propostaId: string, resposta: "aconteceu"|"nao-aconteceu", pesoG?: number) {
+    if (demoMode) {
+      if (!user) { showToast("Escolha um perfil demonstrativo para continuar."); return; }
+      const p=propostas.find(x=>x.id===propostaId), listing=p?listagens.find(l=>l.id===p.listagemId):null, meeting=encontros.find(e=>e.propostaId===propostaId&&e.status==="aceito");
+      if(!p||!listing||(listing.usuarioId!==user.id&&p.proponenteId!==user.id)||!meeting||p.status!=="encontro-agendado"||TODAY<=meeting.data||p.confirmacoes.some(c=>c.usuarioId===user.id)) { showToast("Esta confirmacao nao esta disponivel nesta negociacao."); return; }
+      const confirmations=[...p.confirmacoes,{usuarioId:user.id,resposta,pesoG,criadaEm:new Date().toISOString()}];
+      let status: StatusTroca="encontro-agendado";
+      if(confirmations.length>=2){const same=confirmations.every(c=>c.resposta===confirmations[0].resposta);status=same?(resposta==="aconteceu"?"concluido":"nao-compareceu"):"divergencia";}
+      setPropostas(items=>items.map(x=>x.id===p.id?{...x,confirmacoes,status}:x));
+      if(status==="concluido")setListagens(items=>items.map(x=>x.id===listing.id?{...x,status:"concluida"}:x));
+      showToast(confirmations.length<2?"Confirmação registrada. Aguardando a outra parte.":status==="concluido"?"Troca concluída na demonstração.":status==="nao-compareceu"?"Registrado como não realizado.":"Respostas divergentes. Em análise."); return;
+    }
     if(!user || !supabase) throw new Error("Supabase is required to confirm a trade");
     const p=propostas.find(x=>x.id===propostaId); if(!p)return;
     if (p.confirmacoes.some(c => c.usuarioId === user.id)) return;
@@ -3018,26 +3218,30 @@ export default function App() {
       showToast("Nao foi possivel salvar sua confirmacao. Tente novamente.");
       throw error;
     }
-    const novaConf: ConfirmacaoEncontro = { usuarioId:user.id, resposta, pesoG, criadaEm:new Date().toISOString() };
-    const novasConfs=[...p.confirmacoes,novaConf];
-    let novoStatus: StatusTroca="encontro-agendado";
-    if(novasConfs.length>=2){ const todosA=novasConfs.every(c=>c.resposta==="aconteceu"); const todosN=novasConfs.every(c=>c.resposta==="nao-aconteceu"); novoStatus=todosA?"concluido":todosN?"nao-compareceu":"divergencia"; }
-    if (novasConfs.length >= 2) {
-      const { data: statusRow, error: statusError } = await supabase.from("proposals").update({ status: novoStatus }).eq("id", propostaId).select("id").maybeSingle();
-      if (statusError || !statusRow) { console.error("Confirmation saved; proposal status update failed:", statusError); showToast("Confirmacao salva, mas nao foi possivel atualizar o status da troca."); }
-      if (novoStatus === "concluido") {
-        const { data: listingRow, error: listingError } = await supabase.from("listings").update({ status: "concluida" }).eq("id", listing.id).select("id").maybeSingle();
-        if (listingError || !listingRow) console.error("Trade completed; listing status update failed:", listingError);
-      }
+    // The database trigger finalizes the proposal and listing in the same
+    // transaction that stores the unique participant confirmation.
+    let refreshed: PlatformState;
+    try {
+      refreshed = await fetchPlatformState();
+      applyPlatform(refreshed);
+    } catch (refreshError) {
+      console.error("Confirmation persisted but state refresh failed:", refreshError);
+      showToast("Confirmação salva. Atualize a página para ver o resultado mais recente.");
+      return;
     }
-    setPropostas(prev=>prev.map(x=>x.id===propostaId?{...x,confirmacoes:novasConfs,status:novoStatus}:x));
-    if(novoStatus==="concluido"){ setListagens(prev=>prev.map(l=>l.id===p.listagemId?{...l,status:"concluida"}:l)); showToast("Troca concluida."); }
-    else if(novoStatus==="nao-compareceu")showToast("Registrado como nao realizado.");
-    else if(novoStatus==="divergencia")showToast("Respostas divergentes. Em analise.");
-    else showToast("Confirmacao registrada. Aguardando a outra parte.");
+    const persisted = refreshed.propostas.find(x=>x.id===propostaId);
+    if (!persisted || persisted.confirmacoes.length < 2) { showToast("Confirmação registrada. Aguardando a outra parte."); return; }
+    if (persisted.status === "concluido") showToast("Troca concluída.");
+    else if (persisted.status === "nao-compareceu") showToast("Registrado como não realizado.");
+    else showToast("Respostas divergentes. Em análise.");
   }
 
   async function handleReportarProblema(propostaId: string, listagemId: string, tipo: OcorrenciaPos["tipo"], descricao: string) {
+    if (demoMode) {
+      if (!user) { showToast("Choose a demo profile to continue."); return; }
+      setOcorrencias(items=>[{id:genId(),propostaId,listagemId,usuarioId:user.id,tipo,descricao,criadoEm:new Date().toISOString(),status:"aberta"},...items]);
+      showToast("Report saved in demo mode."); return;
+    }
     if(!user || !supabase) throw new Error("Reporting requires Supabase");
     const { data, error } = await supabase.from("incidents").insert({ proposal_id:propostaId, listing_id:listagemId, reporter_id:user.id, type:tipo, description:descricao, status:"aberta" }).select("*").single();
     if (error || !data) { console.error("Incident report failed:", error); showToast("Nao foi possivel reportar o problema. Tente novamente."); throw error ?? new Error("Incident insert returned no row"); }
@@ -3046,6 +3250,10 @@ export default function App() {
   }
 
   async function handleSendMensagem(texto: string) {
+    if (demoMode) {
+      if (!user || !chatPropostaId) { showToast("This conversation is unavailable in demo mode."); return; }
+      setMensagens(items=>[...items,{id:genId(),rootPropostaId:chatPropostaId,autorId:user.id,tipo:"texto",texto,criadaEm:new Date().toISOString(),lida:false}]); return;
+    }
     if(!user||!chatPropostaId||!supabase) throw new Error("Chat requires a Supabase session");
     const { data, error } = await supabase.from("messages").insert({
       proposal_id: chatPropostaId, author_id: user.id, kind: "texto", content: texto,
@@ -3060,12 +3268,17 @@ export default function App() {
   function handleOpenChat(rootPropostaId: string) { setChatPropostaId(rootPropostaId); navTo("chat"); }
 
   async function markRead(id: string) {
+    if(demoMode){setNotificacoes(items=>items.map(n=>n.id===id?{...n,lida:true}:n));return;}
     if (!supabase) return;
     const { data, error } = await supabase.from("notifications").update({ read_at:new Date().toISOString() }).eq("id",id).eq("user_id",user?.id).select("id").maybeSingle();
     if (error || !data) { console.error("Notification read update failed:", error); return; }
     setNotificacoes(p=>p.map(n=>n.id===id?{...n,lida:true}:n));
   }
   async function markAllRead() {
+    if (demoMode) {
+      if (!user) return;
+      setNotificacoes(items=>items.map(n=>n.usuarioId===user.id?{...n,lida:true}:n)); return;
+    }
     if(!user || !supabase)return;
     const { error } = await supabase.from("notifications").update({ read_at:new Date().toISOString() }).eq("user_id",user.id).is("read_at",null);
     if (error) { console.error("Mark all notifications read failed:", error); showToast("Nao foi possivel atualizar as notificacoes."); return; }
@@ -3073,6 +3286,7 @@ export default function App() {
   }
 
   async function updateAdminProfile(id: string, values: Record<string, unknown>, success: string, local: (items: Usuario[]) => Usuario[]) {
+    if (demoMode) { setUsuarios(local); showToast(`${success} (demonstração)`); return; }
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("profiles").update(values).eq("id", id).select("id").maybeSingle();
     if (error || !data) { console.error("Admin profile update failed:", error); showToast("Nao foi possivel salvar a acao administrativa. Confira as permissoes."); return; }
@@ -3095,6 +3309,7 @@ export default function App() {
     await updateAdminProfile(id, { status:"bloqueado", block_reason:"Removido pelo administrador" }, "Acesso do usuario removido.", items=>items.map(u=>u.id===id?{...u,status:"bloqueado",motivoBloqueio:"Removido pelo administrador"}:u));
   }
   async function handleRemoveListing(id: string) {
+    if(demoMode){setListagens(items=>items.map(l=>l.id===id?{...l,status:"cancelada"}:l));showToast("Publicação removida da demonstração.");return;}
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("listings").update({ status:"cancelada" }).eq("id", id).select("id").maybeSingle();
     if (error || !data) { console.error("Listing removal failed:", error); showToast("Nao foi possivel encerrar esta publicacao."); return; }
@@ -3102,42 +3317,54 @@ export default function App() {
     showToast("Publicacao encerrada.");
   }
   async function handleAddAlimento(nome: string, catId: string) {
+    if(demoMode){const id=genId();setAlimentosBD(items=>[...items,{id,nome,categoriaId:catId,ativo:true}]);showToast("Alimento adicionado no modo demonstrativo.");return;}
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("foods").insert({ name:nome, category_id:catId, active:true }).select("*").single();
     if (error || !data) { console.error("Food insert failed:", error); showToast("Nao foi possivel salvar o alimento."); return; }
     setAlimentosBD(items=>[...items,{id:String(data.id),nome:String(data.name),categoriaId:String(data.category_id),ativo:Boolean(data.active),imagemUrl:data.image_url?String(data.image_url):undefined}]);
   }
   async function handleEditAlimento(id: string, nome: string, catId: string, imgUrl: string) {
+    if(demoMode){setAlimentosBD(items=>items.map(a=>a.id===id?{...a,nome,categoriaId:catId,imagemUrl:imgUrl||undefined}:a));showToast("Alimento atualizado no modo demonstrativo.");return;}
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("foods").update({ name:nome, category_id:catId, image_url:imgUrl||null }).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Food update failed:", error); showToast("Nao foi possivel atualizar o alimento."); return; }
     setAlimentosBD(items=>items.map(a=>a.id===id?{...a,nome,categoriaId:catId,imagemUrl:imgUrl||undefined}:a));
   }
   async function handleToggleAlimento(id: string) {
+    if(demoMode){setAlimentosBD(items=>items.map(a=>a.id===id?{...a,ativo:!a.ativo}:a));showToast("Status do alimento atualizado no modo demonstrativo.");return;}
     const current=alimentosBD.find(a=>a.id===id); if(!current||!supabase)return;
     const { data, error } = await supabase.from("foods").update({ active:!current.ativo }).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Food status update failed:", error); showToast("Nao foi possivel atualizar o status do alimento."); return; }
     setAlimentosBD(items=>items.map(a=>a.id===id?{...a,ativo:!current.ativo}:a));
   }
   async function handleAddCategoria(nome: string) {
+    if(demoMode){setCategorias(items=>[...items,{id:genId(),nome,ativa:true}]);showToast("Categoria adicionada no modo demonstrativo.");return;}
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("categories").insert({ name:nome, active:true }).select("*").single();
     if (error || !data) { console.error("Category insert failed:", error); showToast("Nao foi possivel salvar a categoria."); return; }
     setCategorias(items=>[...items,{id:String(data.id),nome:String(data.name),ativa:Boolean(data.active)}]);
   }
   async function handleEditCategoria(id: string, nome: string) {
+    if(demoMode){setCategorias(items=>items.map(c=>c.id===id?{...c,nome}:c));showToast("Categoria atualizada no modo demonstrativo.");return;}
     if (!supabase) { showToast("Supabase nao esta configurado."); return; }
     const { data, error } = await supabase.from("categories").update({ name:nome }).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Category update failed:", error); showToast("Nao foi possivel atualizar a categoria."); return; }
     setCategorias(items=>items.map(c=>c.id===id?{...c,nome}:c));
   }
   async function handleToggleCategoria(id: string) {
+    if(demoMode){setCategorias(items=>items.map(c=>c.id===id?{...c,ativa:!c.ativa}:c));showToast("Status da categoria atualizado no modo demonstrativo.");return;}
     const current=categorias.find(c=>c.id===id); if(!current||!supabase)return;
     const { data, error } = await supabase.from("categories").update({ active:!current.ativa }).eq("id",id).select("id").maybeSingle();
     if (error || !data) { console.error("Category status update failed:", error); showToast("Nao foi possivel atualizar o status da categoria."); return; }
     setCategorias(items=>items.map(c=>c.id===id?{...c,ativa:!current.ativa}:c));
   }
   async function handleUpdatePerfil(updates: Partial<Usuario>) {
+    if (demoMode) {
+      if (!user) { showToast("Choose a demo profile to continue."); return; }
+      setUsuarios(items=>items.map(u=>u.id===user.id?{...u,...updates}:u));
+      setUser(current=>current?{...current,...updates}:current);
+      showToast("Profile updated in demo mode."); return;
+    }
     if(!user || !supabase) throw new Error("Profile updates require Supabase");
     if (updates.email && updates.email !== user.email) {
       const { error: authError } = await supabase.auth.updateUser({ email: updates.email });
@@ -3160,6 +3387,7 @@ export default function App() {
   }
 
   async function handleChangePassword(nova: string): Promise<string|null> {
+    if (demoMode) return "A troca de senha não está disponível na demonstração.";
     if (!supabase) return "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.";
     const { error } = await supabase.auth.updateUser({ password: nova });
     if (error) return traduzirErroAuth(error.message);
@@ -3175,7 +3403,9 @@ export default function App() {
         {toast&&<div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-semibold max-w-xs"><CheckCircle2 className="w-4 h-4 flex-shrink-0"/><span className="flex-1">{toast}</span><button onClick={()=>setToast("")}><X className="w-3.5 h-3.5 opacity-60"/></button></div>}
         {view==="registro"&&<RegistroView onSubmit={handleRegistro} onBack={()=>setView("landing")} alimentosBD={alimentosBD} categorias={categorias}/>}
         {view==="login"&&<LoginView onLogin={handleLogin} onRegistro={()=>setView("registro")} onBack={()=>setView("landing")}/>}
-        {view!=="registro"&&view!=="login"&&<LandingView onLogin={()=>setView("login")} onRegistro={()=>setView("registro")}/>}
+        {view==="public-experience"&&<PublicExperience mode="demo" onLogin={()=>setView("login")} onRegister={()=>setView("registro")} onExit={()=>setView("landing")} onStartDemo={startDemo}/>}
+        {view==="public-wall"&&<PublicExperience mode="wall" onLogin={()=>setView("login")} onRegister={()=>setView("registro")} onExit={()=>setView("landing")} onStartDemo={startDemo}/>}
+        {view!=="registro"&&view!=="login"&&view!=="public-experience"&&view!=="public-wall"&&<LandingView onLogin={()=>setView("login")} onRegistro={()=>setView("registro")} onDemo={()=>setView("public-experience")} onWall={()=>setView("public-wall")}/>}
       </>
     );
   }
@@ -3183,14 +3413,14 @@ export default function App() {
   function renderMain() {
     switch(view) {
       case "dashboard": return <DashboardView user={user!} listagens={listagens} propostas={propostas} usuarios={usuarios} encontros={encontros} pendingConfirmationId={pendingConfirmationId} alimentosBD={alimentosBD} setView={setView} navTo={navTo}/>;
-      case "listagens": return <ListagensView listagens={listagens} usuarios={usuarios} alimentosBD={alimentosBD} categorias={categorias} navTo={navTo}/>;
-      case "detalhes": return selectedId ? <DetalhesView listagemId={selectedId} listagens={listagens} propostas={propostas} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} ocorrencias={ocorrencias} onBack={()=>setView(fromView)} onAddProposta={handleAddProposta} onUpdateListagem={handleUpdateListagem} onUpdateProposta={handleUpdateProposta} onRegistrarConfirmacao={handleRegistrarConfirmacao} onAgendarEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onEditListagem={handleEditListagem} onEncerrarListagem={handleEncerrarListagem} onReportarProblema={handleReportarProblema} onOpenChat={handleOpenChat}/> : null;
+      case "listagens": return <ListagensView listagens={listagens} usuarios={usuarios} alimentosBD={alimentosBD} categorias={categorias} navTo={navTo} filtroTipo={listagensFiltroTipo} setFiltroTipo={setListagensFiltroTipo}/>;
+      case "detalhes": return selectedId ? <DetalhesView listagemId={selectedId} listagens={listagens} propostas={propostas} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} ocorrencias={ocorrencias} onBack={()=>setView(fromView)} onAddProposta={handleAddProposta} onUpdateListagem={handleUpdateListagem} onUpdateProposta={handleUpdateProposta} onRegistrarConfirmacao={handleRegistrarConfirmacao} onAgendarEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onEditListagem={handleEditListagem} onEncerrarListagem={handleEncerrarListagem} onReportarProblema={handleReportarProblema} onOpenChat={handleOpenChat}/> : <EmptyRouteView title="Publicação indisponível" description="Não foi possível abrir esta publicação. Volte ao início ou escolha outra oferta." onBack={()=>setView("dashboard")}/>;
       case "nova-listagem": return <NovaListagemView onSubmit={handleAddListagem} onBack={()=>setView("listagens")} alimentosBD={alimentosBD} categorias={categorias}/>;
       case "minhas-trocas": return <MinhasTrocasView user={user!} listagens={listagens} propostas={propostas} usuarios={usuarios} encontros={encontros} alimentosBD={alimentosBD} navTo={navTo}/>;
-      case "admin": return isAdminUser(user!) ? <AdminView tab={adminTab} setTab={setAdminTab} usuarios={usuarios} listagens={listagens} propostas={propostas} encontros={encontros} ocorrencias={ocorrencias} alimentosBD={alimentosBD} categorias={categorias} onApprove={handleApprove} onRejectWithReason={handleRejectWithReason} onBlock={handleBlock} onUnblock={handleUnblock} onDeleteUser={handleDeleteUser} onRemoveListing={handleRemoveListing} onAddAlimento={handleAddAlimento} onEditAlimento={handleEditAlimento} onToggleAlimento={handleToggleAlimento} onAddCategoria={handleAddCategoria} onEditCategoria={handleEditCategoria} onToggleCategoria={handleToggleCategoria}/> : null;
+      case "admin": return isAdminUser(user!) ? <AdminView tab={adminTab} setTab={setAdminTab} usuarios={usuarios} listagens={listagens} propostas={propostas} encontros={encontros} ocorrencias={ocorrencias} alimentosBD={alimentosBD} categorias={categorias} onApprove={handleApprove} onRejectWithReason={handleRejectWithReason} onBlock={handleBlock} onUnblock={handleUnblock} onDeleteUser={handleDeleteUser} onRemoveListing={handleRemoveListing} onAddAlimento={handleAddAlimento} onEditAlimento={handleEditAlimento} onToggleAlimento={handleToggleAlimento} onAddCategoria={handleAddCategoria} onEditCategoria={handleEditCategoria} onToggleCategoria={handleToggleCategoria}/> : <EmptyRouteView title="Área administrativa indisponível" description="Este perfil não tem acesso ao painel administrativo." onBack={()=>setView("dashboard")}/>;
       case "perfil": return <PerfilView user={user!} onLogout={handleLogout} onUpdatePerfil={handleUpdatePerfil} onChangePassword={handleChangePassword} alimentosBD={alimentosBD}/>;
-      case "chat": return chatPropostaId ? <ChatView rootPropostaId={chatPropostaId} mensagens={mensagens} propostas={propostas} listagens={listagens} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} onSend={handleSendMensagem} onProporEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onBack={()=>setView(fromView||"detalhes")}/> : null;
-      default: return null;
+      case "chat": return chatPropostaId ? <ChatView rootPropostaId={chatPropostaId} mensagens={mensagens} propostas={propostas} listagens={listagens} usuarios={usuarios} user={user!} encontros={encontros} alimentosBD={alimentosBD} onSend={handleSendMensagem} onProporEncontro={handleProporEncontro} onAceitarEncontro={handleAceitarEncontro} onRecusarEncontro={handleRecusarEncontro} onContrapropostaEncontro={handleContrapropostaEncontro} onCancelarEncontro={handleCancelarEncontro} onBack={()=>setView(fromView||"detalhes")}/> : <EmptyRouteView title="Conversa indisponível" description="Esta conversa não está disponível. Volte ao painel para continuar explorando." onBack={()=>setView("dashboard")}/>;
+      default: return <EmptyRouteView title="Conteúdo indisponível" description="Esta área não está disponível no momento. Volte ao painel para continuar." onBack={()=>setView("dashboard")}/>;
     }
   }
 
@@ -3215,7 +3445,7 @@ export default function App() {
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           <TopBar title={topBarTitle} onBack={isNested?()=>{ if(view==="chat")setView(fromView||"detalhes"); else setView(fromView); }:undefined} notifCount={notifCount} onNotif={()=>setShowNotifPanel(true)} onLogout={isAdminUser(user)?handleLogout:undefined}/>
           <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain ${!isNested?"pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0":""}`}>
-            {renderMain()}
+            <AppErrorBoundary key={view} onRecover={()=>setView("dashboard")}>{renderMain()}</AppErrorBoundary>
           </div>
         </div>
       </div>
